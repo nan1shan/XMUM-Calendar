@@ -102,9 +102,12 @@ export default function App() {
   const [events, setEvents]       = useState([]);
 
   const [selectedDate, setSelectedDate] = useState(null);
+  const [selectedWeek, setSelectedWeek] = useState(null); // { weekIndex, label, dates }
   const [showForm, setShowForm]   = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [form, setForm] = useState({ type: "asm", course: "", title: "", location: "", time: "23:59" });
+  const [transferring, setTransferring] = useState(null); // 正在转移的 event
+  const [transferForm, setTransferForm] = useState({ dayIndex: 0, location: "", time: "23:59" });
 
   useEffect(() => { localStorage.setItem("xmum_semId", semId); }, [semId]);
   useEffect(() => { localStorage.setItem("xmum_startDay", startDay); }, [startDay]);
@@ -188,6 +191,9 @@ export default function App() {
     else { normalCount++; label = `Week ${normalCount}`; labelClass = ""; }
     rows.push({ dates, label, labelClass, rowType });
   }
+
+  function getWeekEventKey(semId, weekLabel) { return `WEEK:${semId}:${weekLabel}`; }
+  function getEventsForWeek(weekLabel) { return events.filter(e => e.date === getWeekEventKey(semId, weekLabel)); }
 
   function getEventsForDate(d) { return events.filter(e => e.date === d); }
   function getTypeInfo(tid) { return EVENT_TYPES.find(t => t.id === tid) || EVENT_TYPES[EVENT_TYPES.length - 1]; }
@@ -298,7 +304,16 @@ export default function App() {
             <tbody>
               {rows.map((row, ri) => (
                 <tr key={ri}>
-                  <td className={`week-label ${row.labelClass}`}>{row.label}</td>
+                  <td
+                    className={`week-label ${row.labelClass}`}
+                    style={{ cursor: "pointer", position: "relative" }}
+                    onClick={() => { setSelectedWeek({ ...row, weekIndex: ri }); setSelectedDate(null); setShowForm(false); setTransferring(null); }}
+                  >
+                    {row.label}
+                    {getEventsForWeek(row.label).length > 0 && (
+                      <span style={{ display:"block", width:"5px", height:"5px", borderRadius:"50%", background:"#94a3b8", margin:"2px auto 0" }} />
+                    )}
+                  </td>
                   {row.dates.map((date, di) => {
                     const cellType = getCellType(date, sem.specialRanges);
                     const isWknd = weekendCols.includes(di);
@@ -342,123 +357,230 @@ export default function App() {
         {/* RIGHT PANEL */}
         <div className="panel">
           <div className="mobile-handle" />
-          {!panelOpen ? (
-            <div className="no-events" style={{padding:"40px 20px",textAlign:"center",color:"var(--text-faint, #a8a29e)",fontSize:"13px"}}>
-              ← Select a date to view or add events
+
+          {/* 转移弹窗 */}
+          {transferring && (
+            <div style={{ padding:"16px", borderBottom:"1px solid var(--border)", background:"#fffbeb" }}>
+              <div style={{ fontWeight:600, fontSize:"13px", marginBottom:"12px" }}>
+                📌 转移事项到具体日期
+              </div>
+              <div style={{ marginBottom:"8px", fontSize:"12px", color:"var(--text-muted)" }}>选择周几</div>
+              <select
+                value={transferForm.dayIndex}
+                onChange={e => setTransferForm(f => ({ ...f, dayIndex: parseInt(e.target.value) }))}
+                style={{ width:"100%", padding:"7px 10px", borderRadius:"7px", border:"1px solid var(--border)", marginBottom:"8px", fontSize:"13px" }}
+              >
+                {selectedWeek && selectedWeek.dates.map((date, i) => (
+                  <option key={i} value={i}>
+                    {dayLabels[i]}（{formatDate(date, dateStyle)}）
+                  </option>
+                ))}
+              </select>
+              <input placeholder="地点 Location" value={transferForm.location}
+                onChange={e => setTransferForm(f => ({ ...f, location: e.target.value }))}
+                style={{ width:"100%", padding:"7px 10px", borderRadius:"7px", border:"1px solid var(--border)", marginBottom:"8px", fontSize:"13px" }} />
+              <div style={{ display:"flex", gap:"6px", marginBottom:"8px" }}>
+                <input type="time" value={transferForm.time}
+                  onChange={e => setTransferForm(f => ({ ...f, time: e.target.value }))}
+                  style={{ flex:1, padding:"7px 10px", borderRadius:"7px", border:"1px solid var(--border)", fontSize:"13px" }} />
+                {isMidnight(transferForm.time) && <span style={{ fontSize:"11px", color:"#ea580c", alignSelf:"center" }}>⚠️ 前一天完成</span>}
+              </div>
+              <div style={{ display:"flex", gap:"8px" }}>
+                <button onClick={async () => {
+                  const newDate = selectedWeek.dates[transferForm.dayIndex];
+                  await supabase.from("events").update({ date: newDate, location: transferForm.location, time: transferForm.time }).eq("id", transferring.id);
+                  setEvents(prev => prev.map(e => e.id === transferring.id ? { ...e, date: newDate, location: transferForm.location, time: transferForm.time } : e));
+                  setTransferring(null);
+                  setSelectedDate(newDate);
+                  setSelectedWeek(null);
+                }} style={{ flex:1, padding:"8px", background:"#2563eb", color:"white", border:"none", borderRadius:"7px", fontSize:"13px", fontWeight:600, cursor:"pointer" }}>
+                  确认转移
+                </button>
+                <button onClick={() => setTransferring(null)}
+                  style={{ padding:"8px 14px", background:"var(--surface2)", border:"1px solid var(--border)", borderRadius:"7px", fontSize:"13px", cursor:"pointer" }}>
+                  取消
+                </button>
+              </div>
             </div>
-          ) : (
+          )}
+
+          {/* 周面板 */}
+          {selectedWeek && !transferring && (
             <>
               <div className="panel-header">
-                <div>
-                  <div className="panel-date">
-                    {new Date(selectedDate + "T00:00:00").toLocaleDateString("en-GB",
-                      { weekday: "long", year: "numeric", month: "long", day: "numeric" })}
-                  </div>
-                  {isHoliday && <div className="holiday-badge">🎉 Public Holiday</div>}
-                </div>
-                <div style={{ display: "flex", gap: "6px" }}>
-                  <button className="add-btn" onClick={() => { setShowForm(f => !f); setEditingId(null); setForm({ type: "asm", course: "", title: "", location: "", time: "23:59" }); }}>
-                    {showForm ? "✕" : "+ Add"}
-                  </button>
-                  <button className="close-btn" onClick={() => { setSelectedDate(null); setShowForm(false); }}>✕</button>
+                <div className="panel-date">{selectedWeek.label} · 周事项</div>
+                <div style={{ display:"flex", gap:"6px" }}>
+                  <button className="add-btn" onClick={() => {
+                    setShowForm(f => !f);
+                    setEditingId(null);
+                    setForm({ type: "asm", course: "", title: "", location: "", time: "23:59" });
+                  }}>{showForm ? "✕" : "+ Add"}</button>
+                  <button className="close-btn" onClick={() => { setSelectedWeek(null); setShowForm(false); }}>✕</button>
                 </div>
               </div>
 
               {showForm && (
                 <div className="add-form">
-                  <select value={form.type} onChange={e => {
-                    const newType = e.target.value;
-                    setForm(f => {
-                      const match = events.find(ev =>
-                        ev.type === newType &&
-                        ev.course.trim().toLowerCase() === f.course.trim().toLowerCase() &&
-                        f.course.trim() !== "" &&
-                        ev.id !== editingId
-                      );
-                      return {
-                        ...f,
-                        type: newType,
-                        location: match ? match.location : f.location,
-                        time: match ? match.time : f.time,
-                      };
-                    });
-                  }}>
-                    {getTypesForDate(selectedDate).map(t => (
+                  <select value={form.type} onChange={e => setForm(f => ({ ...f, type: e.target.value }))}>
+                    {getTypesForDate(selectedWeek.dates[2]).map(t => (
                       <option key={t.id} value={t.id}>{t.label}</option>
                     ))}
                   </select>
-                  <input placeholder="Course (e.g. wpp)" value={form.course}
-                    onChange={e => {
-                      const newCourse = e.target.value;
-                      setForm(f => {
-                        const match = events.find(ev =>
-                          ev.type === f.type &&
-                          ev.course.trim().toLowerCase() === newCourse.trim().toLowerCase() &&
-                          ev.id !== editingId
-                        );
-                        return {
-                          ...f,
-                          course: newCourse,
-                          location: match ? match.location : f.location,
-                          time: match ? match.time : f.time,
-                        };
-                      });
-                    }} />
+                  <input placeholder="Course (e.g. EEE3001)" value={form.course}
+                    onChange={e => setForm(f => ({ ...f, course: e.target.value }))} />
                   <input placeholder="Title / Description *" value={form.title}
                     onChange={e => setForm(f => ({ ...f, title: e.target.value }))} />
-                  <input placeholder="Location (e.g. A3_620, Online)" value={form.location}
-                    onChange={e => setForm(f => ({ ...f, location: e.target.value }))} />
-                  <div className="time-row">
-                    <input type="time" value={form.time}
-                      onChange={e => setForm(f => ({ ...f, time: e.target.value }))} />
-                    {isMidnight(form.time) && (
-                      <span className="midnight-warn">⚠️ Midnight — finish the night before!</span>
-                    )}
-                  </div>
-                  <button className="save-btn" onClick={addEvent}>{editingId ? "Update" : "Save"}</button>
+                  <button className="save-btn" onClick={async () => {
+                    if (!form.title.trim() || !user) return;
+                    const weekKey = getWeekEventKey(semId, selectedWeek.label);
+                    if (editingId) {
+                      await supabase.from("events").update({ type: form.type, course: form.course, title: form.title }).eq("id", editingId);
+                      setEvents(prev => prev.map(e => e.id === editingId ? { ...e, type: form.type, course: form.course, title: form.title } : e));
+                      setEditingId(null);
+                    } else {
+                      const newEv = { user_id: user.id, date: weekKey, type: form.type, course: form.course, title: form.title, location: "", time: "", done: false };
+                      const { data } = await supabase.from("events").insert(newEv).select().single();
+                      if (data) setEvents(prev => [...prev, data]);
+                    }
+                    setForm({ type: "asm", course: "", title: "", location: "", time: "23:59" });
+                    setShowForm(false);
+                  }}>{editingId ? "Update" : "Save"}</button>
                 </div>
               )}
 
               <div className="event-list">
-                {selEvents.length === 0 && !showForm && (
-                  <div className="no-events">No events — click + Add to create one</div>
+                {getEventsForWeek(selectedWeek.label).length === 0 && !showForm && (
+                  <div className="no-events">暂无事项 — 点 + Add 添加</div>
                 )}
-                {selEvents.map(ev => {
+                {getEventsForWeek(selectedWeek.label).map(ev => {
                   const t = getTypeInfo(ev.type);
                   return (
-                    <div key={ev.id} className={`event-card ${ev.done ? "done" : ""}`}>
+                    <div key={ev.id} className="event-card">
                       <div className="event-card-left" style={{ borderColor: t.color }}>
-                        <span className="event-type-badge"
-                          style={{ background: t.color + "22", color: t.color }}>
-                          {t.label}
-                        </span>
+                        <span className="event-type-badge" style={{ background: t.color + "22", color: t.color }}>{t.label}</span>
                         <div className="event-title">{ev.title}</div>
-                        {ev.course   && <div className="event-meta">📚 {ev.course}</div>}
-                        {ev.location && <div className="event-meta">📍 {ev.location}</div>}
-                        <div className="event-time">
-                          🕐 {ev.time}
-                          {isMidnight(ev.time) && <span className="midnight-tag"> ⚠️ finish night before</span>}
-                          {(() => {
-                            const diff = Math.ceil((new Date(ev.date + "T00:00:00") - new Date(today + "T00:00:00")) / 86400000);
-                            if (diff > 0) return <span style={{marginLeft:"6px", color:"#2563eb", fontWeight:"600"}}>· {diff}d left</span>;
-                            if (diff === 0) return <span style={{marginLeft:"6px", color:"#ea580c", fontWeight:"600"}}>· Due today</span>;
-                            return <span style={{marginLeft:"6px", color:"#94a3b8", fontWeight:"600"}}>· {Math.abs(diff)}d ago</span>;
-                          })()}
-                        </div>
+                        {ev.course && <div className="event-meta">📚 {ev.course}</div>}
+                        <div style={{ fontSize:"11px", color:"#f59e0b", marginTop:"4px" }}>📌 待定具体日期</div>
                       </div>
                       <div className="event-actions">
-                        <button onClick={() => toggleDone(ev.id, ev.done)}>{ev.done ? "↩" : "✓"}</button>
-                        <button onClick={() => {
-                          setForm({ type: ev.type, course: ev.course, title: ev.title, location: ev.location, time: ev.time });
+                        <button title="转移到具体日期" onClick={() => {
+                          setTransferring(ev);
+                          setTransferForm({ dayIndex: 0, location: "", time: "23:59" });
+                        }}>📅</button>
+                        <button title="编辑" onClick={() => {
+                          setForm({ type: ev.type, course: ev.course, title: ev.title, location: "", time: "" });
                           setEditingId(ev.id);
                           setShowForm(true);
                         }}>✏️</button>
-                        <button onClick={() => deleteEvent(ev.id)}>🗑</button>
+                        <button title="删除" onClick={() => deleteEvent(ev.id)}>🗑</button>
                       </div>
                     </div>
                   );
                 })}
               </div>
+            </>
+          )}
+
+          {/* 日期面板 */}
+          {!selectedWeek && !transferring && (
+            <>
+              {!panelOpen ? (
+                <div className="no-events" style={{ padding:"40px 20px", textAlign:"center", color:"var(--text-faint, #a8a29e)", fontSize:"13px" }}>
+                  ← 点击日期或周标签查看事项
+                </div>
+              ) : (
+                <>
+                  <div className="panel-header">
+                    <div>
+                      <div className="panel-date">
+                        {new Date(selectedDate + "T00:00:00").toLocaleDateString("en-GB",
+                          { weekday: "long", year: "numeric", month: "long", day: "numeric" })}
+                      </div>
+                      {isHoliday && <div className="holiday-badge">🎉 Public Holiday</div>}
+                    </div>
+                    <div style={{ display: "flex", gap: "6px" }}>
+                      <button className="add-btn" onClick={() => { setShowForm(f => !f); setEditingId(null); setForm({ type: "asm", course: "", title: "", location: "", time: "23:59" }); }}>
+                        {showForm ? "✕" : "+ Add"}
+                      </button>
+                      <button className="close-btn" onClick={() => { setSelectedDate(null); setShowForm(false); }}>✕</button>
+                    </div>
+                  </div>
+
+                  {showForm && (
+                    <div className="add-form">
+                      <select value={form.type} onChange={e => {
+                        const newType = e.target.value;
+                        setForm(f => {
+                          const match = events.find(ev => ev.type === newType && ev.course.trim().toLowerCase() === f.course.trim().toLowerCase() && f.course.trim() !== "" && ev.id !== editingId);
+                          return { ...f, type: newType, location: match ? match.location : f.location, time: match ? match.time : f.time };
+                        });
+                      }}>
+                        {getTypesForDate(selectedDate).map(t => (
+                          <option key={t.id} value={t.id}>{t.label}</option>
+                        ))}
+                      </select>
+                      <input placeholder="Course (e.g. EEE3001)" value={form.course}
+                        onChange={e => {
+                          const newCourse = e.target.value;
+                          setForm(f => {
+                            const match = events.find(ev => ev.type === f.type && ev.course.trim().toLowerCase() === newCourse.trim().toLowerCase() && ev.id !== editingId);
+                            return { ...f, course: newCourse, location: match ? match.location : f.location, time: match ? match.time : f.time };
+                          });
+                        }} />
+                      <input placeholder="Title / Description *" value={form.title}
+                        onChange={e => setForm(f => ({ ...f, title: e.target.value }))} />
+                      <input placeholder="Location (e.g. A3_620, Online)" value={form.location}
+                        onChange={e => setForm(f => ({ ...f, location: e.target.value }))} />
+                      <div className="time-row">
+                        <input type="time" value={form.time}
+                          onChange={e => setForm(f => ({ ...f, time: e.target.value }))} />
+                        {isMidnight(form.time) && (
+                          <span className="midnight-warn">⚠️ Midnight — finish the night before!</span>
+                        )}
+                      </div>
+                      <button className="save-btn" onClick={addEvent}>{editingId ? "Update" : "Save"}</button>
+                    </div>
+                  )}
+
+                  <div className="event-list">
+                    {selEvents.length === 0 && !showForm && (
+                      <div className="no-events">No events — click + Add to create one</div>
+                    )}
+                    {selEvents.map(ev => {
+                      const t = getTypeInfo(ev.type);
+                      return (
+                        <div key={ev.id} className={`event-card ${ev.done ? "done" : ""}`}>
+                          <div className="event-card-left" style={{ borderColor: t.color }}>
+                            <span className="event-type-badge" style={{ background: t.color + "22", color: t.color }}>{t.label}</span>
+                            <div className="event-title">{ev.title}</div>
+                            {ev.course   && <div className="event-meta">📚 {ev.course}</div>}
+                            {ev.location && <div className="event-meta">📍 {ev.location}</div>}
+                            <div className="event-time">
+                              🕐 {ev.time}
+                              {isMidnight(ev.time) && <span className="midnight-tag"> ⚠️ finish night before</span>}
+                              {(() => {
+                                const diff = Math.ceil((new Date(ev.date + "T00:00:00") - new Date(today + "T00:00:00")) / 86400000);
+                                if (diff > 0) return <span style={{marginLeft:"6px", color:"#2563eb", fontWeight:"600"}}>· {diff}d left</span>;
+                                if (diff === 0) return <span style={{marginLeft:"6px", color:"#ea580c", fontWeight:"600"}}>· Due today</span>;
+                                return <span style={{marginLeft:"6px", color:"#94a3b8", fontWeight:"600"}}>· {Math.abs(diff)}d ago</span>;
+                              })()}
+                            </div>
+                          </div>
+                          <div className="event-actions">
+                            <button onClick={() => toggleDone(ev.id, ev.done)}>{ev.done ? "↩" : "✓"}</button>
+                            <button onClick={() => {
+                              setForm({ type: ev.type, course: ev.course, title: ev.title, location: ev.location, time: ev.time });
+                              setEditingId(ev.id);
+                              setShowForm(true);
+                            }}>✏️</button>
+                            <button onClick={() => deleteEvent(ev.id)}>🗑</button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
             </>
           )}
         </div>
