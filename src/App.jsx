@@ -103,6 +103,7 @@ export default function App() {
 
   const [selectedDate, setSelectedDate] = useState(null);
   const [showForm, setShowForm]   = useState(false);
+  const [editingId, setEditingId] = useState(null);
   const [form, setForm] = useState({ type: "asm", course: "", title: "", location: "", time: "23:59" });
 
   useEffect(() => { localStorage.setItem("xmum_semId", semId); }, [semId]);
@@ -140,9 +141,15 @@ export default function App() {
 
   async function addEvent() {
     if (!form.title.trim() || !user) return;
-    const newEvent = { user_id: user.id, date: selectedDate, ...form, done: false };
-    const { data } = await supabase.from("events").insert(newEvent).select().single();
-    if (data) setEvents(prev => [...prev, data]);
+    if (editingId) {
+      await supabase.from("events").update({ ...form }).eq("id", editingId);
+      setEvents(prev => prev.map(e => e.id === editingId ? { ...e, ...form } : e));
+      setEditingId(null);
+    } else {
+      const newEvent = { user_id: user.id, date: selectedDate, ...form, done: false };
+      const { data } = await supabase.from("events").insert(newEvent).select().single();
+      if (data) setEvents(prev => [...prev, data]);
+    }
     setForm({ type: "asm", course: "", title: "", location: "", time: "23:59" });
     setShowForm(false);
   }
@@ -350,7 +357,7 @@ export default function App() {
                   {isHoliday && <div className="holiday-badge">🎉 Public Holiday</div>}
                 </div>
                 <div style={{ display: "flex", gap: "6px" }}>
-                  <button className="add-btn" onClick={() => setShowForm(f => !f)}>
+                  <button className="add-btn" onClick={() => { setShowForm(f => !f); setEditingId(null); setForm({ type: "asm", course: "", title: "", location: "", time: "23:59" }); }}>
                     {showForm ? "✕" : "+ Add"}
                   </button>
                   <button className="close-btn" onClick={() => { setSelectedDate(null); setShowForm(false); }}>✕</button>
@@ -359,13 +366,44 @@ export default function App() {
 
               {showForm && (
                 <div className="add-form">
-                  <select value={form.type} onChange={e => setForm(f => ({ ...f, type: e.target.value }))}>
+                  <select value={form.type} onChange={e => {
+                    const newType = e.target.value;
+                    setForm(f => {
+                      const match = events.find(ev =>
+                        ev.type === newType &&
+                        ev.course.trim().toLowerCase() === f.course.trim().toLowerCase() &&
+                        f.course.trim() !== "" &&
+                        ev.id !== editingId
+                      );
+                      return {
+                        ...f,
+                        type: newType,
+                        location: match ? match.location : f.location,
+                        time: match ? match.time : f.time,
+                      };
+                    });
+                  }}>
                     {getTypesForDate(selectedDate).map(t => (
                       <option key={t.id} value={t.id}>{t.label}</option>
                     ))}
                   </select>
-                  <input placeholder="Course (e.g. EEE3001)" value={form.course}
-                    onChange={e => setForm(f => ({ ...f, course: e.target.value }))} />
+                  <input placeholder="Course (e.g. wpp)" value={form.course}
+                    onChange={e => {
+                      const newCourse = e.target.value;
+                      setForm(f => {
+                        const match = events.find(ev =>
+                          ev.type === f.type &&
+                          ev.course.trim().toLowerCase() === newCourse.trim().toLowerCase() &&
+                          ev.id !== editingId
+                        );
+                        return {
+                          ...f,
+                          course: newCourse,
+                          location: match ? match.location : f.location,
+                          time: match ? match.time : f.time,
+                        };
+                      });
+                    }} />
                   <input placeholder="Title / Description *" value={form.title}
                     onChange={e => setForm(f => ({ ...f, title: e.target.value }))} />
                   <input placeholder="Location (e.g. A3_620, Online)" value={form.location}
@@ -377,7 +415,7 @@ export default function App() {
                       <span className="midnight-warn">⚠️ Midnight — finish the night before!</span>
                     )}
                   </div>
-                  <button className="save-btn" onClick={addEvent}>Save</button>
+                  <button className="save-btn" onClick={addEvent}>{editingId ? "Update" : "Save"}</button>
                 </div>
               )}
 
@@ -410,6 +448,11 @@ export default function App() {
                       </div>
                       <div className="event-actions">
                         <button onClick={() => toggleDone(ev.id, ev.done)}>{ev.done ? "↩" : "✓"}</button>
+                        <button onClick={() => {
+                          setForm({ type: ev.type, course: ev.course, title: ev.title, location: ev.location, time: ev.time });
+                          setEditingId(ev.id);
+                          setShowForm(true);
+                        }}>✏️</button>
                         <button onClick={() => deleteEvent(ev.id)}>🗑</button>
                       </div>
                     </div>

@@ -42,6 +42,9 @@ No installation needed. Just open the link and you're good to go.
 - 彩色圆点 = 你设置的事项 / Colored dots = your deadlines
 - ⚠️ 时间设在 00:00–05:59 时会提示 **"前一天完成"**  / **Midnight warning** if due time is 00:00–05:59
 - 蓝色数字 = 距截止还有几天 / Blue number = days remaining
+- **自动填充功能**：添加新事项时，若类型与课程代码与历史记录完全一致，地点与时间将自动填充。课程名称需完全相同（如同一门课填写了"Math5"与"math5"会被识别为同一门课，但"Math V"与"Math5"则不会匹配）。
+  **Auto-fill**: When the event type and course name exactly match a previous entry, location and time will be pre-filled. Course names must be identical to match.
+
 
 ---
 
@@ -59,3 +62,5 @@ No installation needed. Just open the link and you're good to go.
 - 每年更新校历数据 / Academic calendar updated each year
 - 目前支持 / Currently supported: **2026/04**, **2026/09**
 - 如有校历错误或建议请留言 / For calendar errors or suggestions, you can just leave a comment
+- **数据保留政策**：为方便定位新学期，本站仅保留最近三年的学期数据，超出范围的历史学期将从日历中移除。如有需要请自行记录旧学期事项。
+  **Data retention**: Only the most recent 3 years of semester data will be maintained. Please keep your own records of older entries if needed.
