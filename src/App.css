@@ -200,3 +200,54 @@ body {
   font-size: 12px; display: flex; align-items: center; justify-content: center;
 }
 .event-actions button:hover { background: var(--border); color: var(--text); }
+@media (max-width: 768px) {
+  .topbar {
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 10px 12px;
+  }
+  .topbar-controls {
+    flex-wrap: wrap;
+    gap: 6px;
+    width: 100%;
+  }
+  .topbar-controls select {
+    flex: 1;
+    min-width: 0;
+    font-size: 12px;
+    padding: 5px 6px;
+  }
+  .topbar-controls button {
+    font-size: 12px;
+    padding: 5px 8px;
+  }
+  .legend {
+    padding: 6px 12px;
+    gap: 8px;
+  }
+  .legend-item { font-size: 11px; }
+
+  .main { flex-direction: column; }
+
+  .calendar-wrap {
+    padding: 8px;
+    overflow-x: auto;
+    flex: none;
+  }
+  .cal-table { min-width: 560px; }
+  .cal-cell { height: 52px; padding: 4px; }
+  .date-num { font-size: 10px; }
+  .week-label { font-size: 9px; }
+
+  .panel {
+    width: 100%;
+    border-left: none;
+    border-top: 1px solid var(--border);
+    max-height: 45vh;
+    overflow-y: auto;
+  }
+  .panel-header { padding: 10px 14px; }
+  .panel-date { font-size: 13px; }
+  .event-list { padding: 10px 14px; }
+  .add-form { padding: 10px 14px; }
+}
