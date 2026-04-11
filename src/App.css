@@ -229,10 +229,9 @@ body {
   }
   .legend-item { font-size: 11px; }
 
-  /* 主体改为纵向排列 */
+  .app { height: auto; min-height: 100vh; overflow: visible; }
   .main { flex-direction: column; overflow: visible; height: auto; }
 
-  /* 日历区域可左右滑动 */
   .calendar-wrap {
     padding: 6px 0;
     overflow-x: scroll;
@@ -242,51 +241,72 @@ body {
     display: block;
   }
 
-  /* 表格固定宽度，week列贴左 */
-  .cal-table {
-    min-width: 620px;
-    width: 620px;
-  }
+  .cal-table { min-width: 480px; width: 480px; }
 
-  /* week列固定在左边不随横向滚动消失 */
-  .week-col { width: 36px; }
+  /* week列极窄 */
+  .week-col { width: 28px; }
   .week-label {
     position: sticky;
     left: 0;
     background: var(--surface2);
     z-index: 2;
-    font-size: 9px;
-    min-width: 36px;
-    width: 36px;
+    font-size: 8px;
+    min-width: 28px;
+    width: 28px;
+    padding: 0 2px;
+    letter-spacing: 0;
   }
   .week-label.rev { background: var(--rev-bg); }
   .week-label.exam { background: var(--exam-bg); }
-
-  /* 表头第一列也固定 */
   .cal-table thead th:first-child {
     position: sticky;
     left: 0;
     background: var(--surface2);
     z-index: 3;
+    width: 28px;
+    min-width: 28px;
   }
 
   .cal-cell { height: 56px; padding: 4px 3px; }
   .date-num { font-size: 10px; }
   .event-dot { width: 6px; height: 6px; }
 
-  /* 面板在日历下方全宽显示 */
+  /* 面板变成底部弹出层 */
   .panel {
+    position: fixed;
+    bottom: 0;
+    left: 0;
     width: 100%;
+    max-height: 60vh;
     border-left: none;
     border-top: 2px solid var(--border);
-    max-height: none;
-    height: auto;
+    border-radius: 16px 16px 0 0;
+    box-shadow: 0 -4px 24px rgba(0,0,0,0.12);
+    z-index: 100;
+    overflow-y: auto;
+    background: var(--surface);
   }
-  .panel-header { padding: 12px 16px; }
+  .panel-header { padding: 14px 16px 10px; }
   .panel-date { font-size: 14px; }
-  .event-list { padding: 10px 16px; }
+  .event-list { padding: 10px 16px 24px; }
   .add-form { padding: 10px 16px; }
 
-  /* app 整体高度自适应，允许页面滚动 */
-  .app { height: auto; min-height: 100vh; overflow: visible; }
+  /* 底部弹出时日历底部留空，防止被遮住 */
+  .main.panel-open .calendar-wrap {
+    padding-bottom: 62vh;
+  }
+}
+
+.mobile-handle {
+  display: none;
+}
+@media (max-width: 768px) {
+  .mobile-handle {
+    display: block;
+    width: 36px;
+    height: 4px;
+    background: var(--border-strong);
+    border-radius: 2px;
+    margin: 10px auto 4px;
+  }
 }

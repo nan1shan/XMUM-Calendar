@@ -334,6 +334,7 @@ export default function App() {
 
         {/* RIGHT PANEL */}
         <div className="panel">
+          <div className="mobile-handle" />
           {!panelOpen ? (
             <div className="no-events" style={{padding:"40px 20px",textAlign:"center",color:"var(--text-faint, #a8a29e)",fontSize:"13px"}}>
               ← Select a date to view or add events
