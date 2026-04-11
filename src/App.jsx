@@ -399,6 +399,12 @@ export default function App() {
                         <div className="event-time">
                           🕐 {ev.time}
                           {isMidnight(ev.time) && <span className="midnight-tag"> ⚠️ finish night before</span>}
+                          {(() => {
+                            const diff = Math.ceil((new Date(ev.date + "T00:00:00") - new Date(today + "T00:00:00")) / 86400000);
+                            if (diff > 0) return <span style={{marginLeft:"6px", color:"#2563eb", fontWeight:"600"}}>· {diff}d left</span>;
+                            if (diff === 0) return <span style={{marginLeft:"6px", color:"#ea580c", fontWeight:"600"}}>· Due today</span>;
+                            return <span style={{marginLeft:"6px", color:"#94a3b8", fontWeight:"600"}}>· {Math.abs(diff)}d ago</span>;
+                          })()}
                         </div>
                       </div>
                       <div className="event-actions">
