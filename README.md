@@ -1,16 +1,61 @@
-# React + Vite
+# 📅 XMUM Deadline Tracker
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+专为厦门大学马来西亚分校学生设计的学期制学业截止日期追踪工具。
 
-Currently, two official plugins are available:
+A semester-based academic deadline tracker for XMUM students.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+🔗 **直接使用 / Live site: [xmum-calendar.vercel.app](https://xmum-calendar.vercel.app)**
 
-## React Compiler
+---
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## 快速开始 / Getting Started
 
-## Expanding the ESLint configuration
+无需安装，打开链接即可使用。
+No installation needed. Just open the link and you're good to go.
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+1. 打开网站，点 **Register** 注册账号（填邮箱 + 至少6位密码）
+   Open the site, click **Register** to create an account (email + min. 6-char password)
+
+2. 右上角选择你的学期、日期样式等
+   Select your semester and date styles from the top-right dropdown
+
+3. 点击日历上任意一天，右边会弹出详情栏
+   Click any date on the calendar to open the side panel
+
+4. 点 **+ Add** 添加事项，填写类型、课程、标题、地点、时间
+   Click **+ Add** to create a deadline — fill in type, course, title, location and time
+
+5. 点 **✓** 标记完成，点 🗑 删除
+   Click **✓** to mark done, 🗑 to delete
+
+---
+
+## 日历说明 / Calendar Guide
+
+| 标签 / Label | 含义 / Meaning |
+|---|---|
+| Week 1–n | 正课周 / Normal teaching weeks |
+| REV | 复习周 / Revision week |
+| EXAM | 考试周 / Examination week |
+
+- 🟡 黄色横条 = 当天是公共假期 / Yellow bar = Public holiday
+- 彩色圆点 = 你设置的事项 / Colored dots = your deadlines
+- ⚠️ 时间设在 00:00–05:59 时会提示 **"前一天完成"**  / **Midnight warning** if due time is 00:00–05:59
+- 蓝色数字 = 距截止还有几天 / Blue number = days remaining
+
+---
+
+## 隐私说明 / Privacy
+
+- 账号**仅用于区分不同用户的数据**，不会收集任何个人信息
+- Your account is used **only to keep your data separate from other users**. No personal data is collected or shared.
+- 存储内容仅包括你填写的课程、标题、地点、时间等截止日期信息
+- Only your deadline entries (course, title, location, time) are stored.
+
+---
+
+## 更新说明 / Updates
+
+- 每年更新校历数据 / Academic calendar updated each year
+- 目前支持 / Currently supported: **2026/04**, **2026/09**
+- 如有校历错误或建议请留言 / For calendar errors or suggestions, you can just leave a comment
