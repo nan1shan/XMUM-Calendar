@@ -57,6 +57,25 @@ No installation needed. Just open the link and you're good to go.
 
 ---
 
+## 周事项（待定日期）/ Week-level Events
+
+有时候老师只说"第八周有期中考"但还没公布具体日期，你可以先记在这一周，等确定后再转移到具体某天。
+
+Sometimes a deadline is announced by week but not yet scheduled to a specific day. You can log it at the week level first, then transfer it later.
+
+**如何使用 / How to use:**
+1. 点击日历左侧的周标签（如 Week 8）即可打开该周的事项面板
+   Click the week label on the left (e.g. Week 8) to open the week panel
+2. 点 **+ Add** 填写类型、课程和标题，无需填写地点与时间
+   Click **+ Add** and fill in type, course and title — no location or time needed
+3. 周标签上出现灰色小点代表该周有待定事项
+   A grey dot on the week label means there are pending events for that week
+4. 事项确定日期后，点 **📅** 按钮，选择具体周几并补全地点与时间，完成转移
+   Once the date is confirmed, click **📅**, select the day of the week, fill in location and time to transfer
+
+**注意 / Note:** 转移后事项将出现在对应日期，原周事项自动移除。
+After transfer, the event will appear on the specific date and be removed from the week panel.
+
 ## 更新说明 / Updates
 
 - 每年更新校历数据 / Academic calendar updated each year
