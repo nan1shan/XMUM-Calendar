@@ -283,15 +283,18 @@ export default function App() {
   async function addEvent() {
     if (!form.title.trim() || !user) return;
     if (editingId) {
-      await supabase.from("events").update({ ...form }).eq("id", editingId);
-      setEvents(prev => prev.map(e => e.id === editingId ? { ...e, ...form } : e));
+      const updateData = { ...form };
+      if (form.date && form.date !== "") updateData.date = form.date;
+      await supabase.from("events").update(updateData).eq("id", editingId);
+      setEvents(prev => prev.map(e => e.id === editingId ? { ...e, ...updateData } : e));
+      setSelectedDate(updateData.date || selectedDate);
       setEditingId(null);
     } else {
       const newEvent = { user_id: user.id, date: selectedDate, ...form, done: false };
       const { data } = await supabase.from("events").insert(newEvent).select().single();
       if (data) setEvents(prev => [...prev, data]);
     }
-    setForm({ type: "asm", course: "", title: "", location: "", time: "23:59" });
+    setForm({ type: "asm", course: "", title: "", location: "", time: "23:59", date: "" });
     setShowForm(false);
   }
 
@@ -711,6 +714,10 @@ export default function App() {
                         onChange={e => setForm(f => ({ ...f, title: e.target.value }))} />
                       <input placeholder={T.location} value={form.location}
                         onChange={e => setForm(f => ({ ...f, location: e.target.value }))} />
+                      {editingId && (
+                        <input type="date" value={form.date}
+                          onChange={e => setForm(f => ({ ...f, date: e.target.value }))} />
+                      )}
                       <div className="time-row">
                         <input type="time" value={form.time}
                           onChange={e => setForm(f => ({ ...f, time: e.target.value }))} />
@@ -762,7 +769,7 @@ export default function App() {
                           <div className="event-actions">
                             <button onClick={() => toggleDone(ev.id, ev.done)}>{ev.done ? "↩" : "✓"}</button>
                             <button onClick={() => {
-                              setForm({ type: ev.type, course: ev.course, title: ev.title, location: ev.location, time: ev.time });
+                              setForm({ type: ev.type, course: ev.course, title: ev.title, location: ev.location, time: ev.time, date: ev.date });
                               setEditingId(ev.id);
                               setShowForm(true);
                             }}>✏️</button>

@@ -1,8 +1,8 @@
 # 📅 XMUM Deadline Tracker
 
-专为厦门大学马来西亚分校学生设计的学期制学业截止日期追踪工具。
+本项目为针对厦门大学马来西亚分校学生课业场景而设计的截止日期追踪工具。有别于传统月份日历，以学期周次为轴线，让你在一个视图内掌握全学期的作业、测验、考试等各类事项，同时可充当以学期划分的校历。
 
-A semester-based academic deadline tracker for XMUM students.
+A deadline tracker built for XMUM students. Unlike conventional monthly calendars, it organizes your semester by week number — so you can see assignments, quizzes, exams, and more across the entire semester at a glance.
 
 🔗 **直接使用 / Live site: [xmum-calendar.vercel.app](https://xmum-calendar.vercel.app)**
 
@@ -25,8 +25,8 @@ No installation needed. Just open the link and you're good to go.
 4. 点 **+ Add** 添加事项，填写类型、课程、标题、地点、时间
    Click **+ Add** to create a deadline — fill in type, course, title, location and time
 
-5. 点 **✓** 标记完成，点 🗑 删除
-   Click **✓** to mark done, 🗑 to delete
+5. 点 **✓** 标记完成，点 🗑 删除。如果不小心设错了日期，也可以在编辑功能中重新更改日期。
+   Click **✓** to mark done, 🗑 to delete. If you accidentally set the wrong date, you can change it in the editing function. 
 
 ---
 
@@ -38,7 +38,7 @@ No installation needed. Just open the link and you're good to go.
 | REV | 复习周 / Revision week |
 | EXAM | 考试周 / Examination week |
 
-- 可以点击右上角的“中/En”切换语言 / You can click "中/En" in the upper right corner to switch languages.
+- 可点击右上角的“中/En”切换语言 / You can click "中/En" in the upper right corner to switch languages.
 - 🟡 黄色横条 = 当天是公共假期 / Yellow bar = Public holiday
 - 彩色圆点 = 你设置的事项 / Colored dots = your deadlines
 - ⚠️ 时间设在 00:00–05:59 时会提示 **"前一天完成"**  / **Midnight warning** if due time is 00:00–05:59
@@ -61,7 +61,7 @@ No installation needed. Just open the link and you're good to go.
 
 ## 周事项（待定日期）/ Week-level Events
 
-有时候老师只说"第八周有期中考"但还没公布具体日期，你可以先记在这一周，等确定后再转移到具体某天。
+当只知道某一周会安排某一事项，不知道具体时间而又想提前记录时，可以点击周标签先行编辑，等确定后再转移到具体某天。
 
 Sometimes a deadline is announced by week but not yet scheduled to a specific day. You can log it at the week level first, then transfer it later.
 
