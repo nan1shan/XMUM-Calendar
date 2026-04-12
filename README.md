@@ -39,11 +39,11 @@ No installation needed. Just open the link and you're good to go.
 | EXAM | 考试周 / Examination week |
 
 - 可点击右上角的“中/En”切换语言 / You can click "中/En" in the upper right corner to switch languages.
-- 🟡 黄色横条 = 当天是公共假期 / Yellow bar = Public holiday
 - 彩色圆点 = 你设置的事项 / Colored dots = your deadlines
 - ⚠️ 时间设在 00:00–05:59 时会提示 **"前一天完成"**  / **Midnight warning** if due time is 00:00–05:59
 - 蓝色数字 = 距截止还有几天 / Blue number = days remaining
 - DDL在1/3天内时，日期右上角会出现橙色/蓝色三角标签 / When the deadline is within 1/3 day(s), an orange/blue triangle will appear in the upper right corner of the date.
+- 当一天有多项事件时，会提示Multi / When there are multiple events in a day, a "Multi" message will be displayed.
 - **自动填充功能**：添加新事项时，若类型与课程代码与历史记录完全一致，地点与时间将自动填充。课程名称需完全相同（如同一门课填写了"Math5"与"math5"会被识别为同一门课，但"Math V"与"Math5"则不会匹配）。
   **Auto-fill**: When the event type and course name exactly match a previous entry, location and time will be pre-filled. Course names must be identical to match.
 
@@ -70,8 +70,8 @@ Sometimes a deadline is announced by week but not yet scheduled to a specific da
    Click the week label on the left (e.g. Week 8) to open the week panel
 2. 点 **+ Add** 填写类型、课程和标题，无需填写地点与时间
    Click **+ Add** and fill in type, course and title — no location or time needed
-3. 周标签上出现灰色小点代表该周有待定事项
-   A grey dot on the week label means there are pending events for that week
+3. 周标签背景出现色块标记代表该周有待定事项
+   The presence of colored blocks in the background of the week label means there are pending events for that week
 4. 事项确定日期后，点 **📅** 按钮，选择具体周几并补全地点与时间，完成转移
    Once the date is confirmed, click **📅**, select the day of the week, fill in location and time to transfer
 

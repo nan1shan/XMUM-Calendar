@@ -102,6 +102,17 @@ body {
   display: flex; flex-direction: column;
   height: 100%; justify-content: space-between;
 }
+.cell-top-row {
+  display: flex; justify-content: space-between; align-items: flex-start;
+}
+.cell-labels { display: flex; flex-direction: column; gap: 1px; flex: 1; }
+.cell-label {
+  font-size: 9px; font-weight: 800;
+  letter-spacing: 0.03em; line-height: 1.3;
+}
+.label-holiday { color: #d97706; }
+.label-rev     { color: #2563eb; }
+.label-multi   { color: #8b5cf6; }
 .cal-cell:hover { background: #ebe9e3; }
 
 /* Weekend: warm cream, left border accent */
@@ -113,15 +124,16 @@ body {
 .cal-cell.exam-day  { background: #fff0f0; }
 .cal-cell.revision { border-top: 2px solid #93c5fd; }
 .cal-cell.exam-day { border-top: 2px solid #fca5a5; }
-.cal-cell.holiday   { background: var(--holiday-bg) !important; }
 .cal-cell.selected  { background: var(--selected-bg) !important; border-color: var(--selected-border) !important; }
 
 .date-num {
   font-size: 12px; color: var(--text-sub); font-weight: 500;
-  align-self: flex-end;
 }
-.today-num {
-  color: var(--accent); font-weight: 800;
+.today-pill {
+  display: inline-block;
+  background: #2563eb; color: white;
+  border-radius: 20px; padding: 1px 6px;
+  font-size: 11px; font-weight: 800; line-height: 1.6;
 }
 .dot-row {
   display: flex; flex-wrap: wrap; gap: 3px;

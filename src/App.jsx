@@ -127,7 +127,7 @@ const EVENT_TYPES = [
   { id: "midterm", label: "Midterm",           color: "#f97316" },
   { id: "project", label: "Project",           color: "#eab308" },
   { id: "asm",     label: "Assignment",        color: "#22c55e" },
-  { id: "quiz",    label: "Quiz",              color: "#3b82f6" },
+  { id: "quiz",    label: "Quiz",              color: "#60a5fa" },
   { id: "pre",     label: "Presentation",      color: "#a855f7" },
   { id: "replace", label: "Replacement Class", color: "#06b6d4" },
   { id: "other",   label: "Other",             color: "#94a3b8" },
@@ -449,7 +449,8 @@ export default function App() {
           </span>
         ))}
         <span className="legend-item">
-          <span style={{ display:"inline-block", width:"14px", height:"4px", borderRadius:"2px", background:"#f59e0b" }} />{T.holidayLegend}
+          <span className="legend-dot" style={{ background:"#d97706" }} />
+          <span style={{ color:"#d97706", fontWeight:600 }}>{T.holidayLegend}</span>
         </span>
         {/* Countdown warning legend items */}
         <span className="legend-item">
@@ -479,51 +480,96 @@ export default function App() {
             <tbody>
               {rows.map((row, ri) => (
                 <tr key={ri}>
-                  <td
-                    className={`week-label ${row.labelClass}`}
-                    style={{ cursor: "pointer", position: "relative" }}
-                    onClick={() => { setSelectedWeek({ ...row, weekIndex: ri }); setSelectedDate(null); setShowForm(false); setTransferring(null); }}
-                  >
-                    {row.label}
-                    {getEventsForWeek(row.label).length > 0 && (
-                      <span style={{ display:"block", width:"5px", height:"5px", borderRadius:"50%", background:"#94a3b8", margin:"2px auto 0" }} />
-                    )}
-                  </td>
+                  {(() => {
+                    const weekEvs = getEventsForWeek(row.label).filter(e => !e.done);
+                    const weekColor = weekEvs.length > 0 ? getTypeInfo(weekEvs[0].type).color : null;
+                    return (
+                      <td
+                        className={`week-label ${row.labelClass}`}
+                        style={{
+                          cursor: "pointer", position: "relative",
+                          ...(weekColor ? {
+                            background: weekColor + "22",
+                            border: `1.5px solid ${weekColor}88`,
+                            borderRadius: "4px",
+                          } : {})
+                        }}
+                        onClick={() => { setSelectedWeek({ ...row, weekIndex: ri }); setSelectedDate(null); setShowForm(false); setTransferring(null); }}
+                      >
+                        {row.label}
+                        {weekEvs.length > 1 && (
+                          <span style={{ display:"block", fontSize:"8px", color: weekColor, fontWeight:800, marginTop:"1px" }}>
+                            ×{weekEvs.length}
+                          </span>
+                        )}
+                      </td>
+                    );
+                  })()}
                   {row.dates.map((date, di) => {
                     const cellType = getCellType(date, sem.specialRanges);
                     const isWknd = weekendCols.includes(di);
                     const dayEvents = getEventsForDate(date);
+                    const undoneEvents = dayEvents.filter(ev => !ev.done);
+                    const hasEvents = undoneEvents.length > 0;
                     const holiday = sem.holidays.includes(date);
                     const isSelected = selectedDate === date;
                     const isToday = date === today;
-                    // Determine urgency badge level for this cell
+                    const isExam = cellType === "exam";
+                    const isRevision = cellType === "revision";
                     const urgency = getCellUrgency(dayEvents, date, today);
+
+                    // Classes: exam always red; revision only when no events; holiday bg removed
                     let cls = "cal-cell";
-                    if (isWknd)                  cls += " weekend";
-                    if (cellType === "revision")  cls += " revision";
-                    else if (cellType === "exam") cls += " exam-day";
-                    if (holiday)                  cls += " holiday";
-                    if (isSelected)               cls += " selected";
+                    if (isWknd)     cls += " weekend";
+                    if (isExam)     cls += " exam-day";
+                    else if (isRevision && !hasEvents) cls += " revision";
+                    if (isSelected) cls += " selected";
+
+                    // Event-tinted background (non-exam, non-selected)
+                    let cellStyle = {};
+                    if (!isExam && !isSelected && hasEvents) {
+                      cellStyle = { background: getTypeInfo(undoneEvents[0].type).color + "26" };
+                    }
+
+                    // Top-left labels
+                    const specialLabel = holiday
+                      ? { text: lang === "zh" ? "假期" : "Holiday", cls: "label-holiday" }
+                      : (isRevision && undoneEvents.length > 1)
+                      ? { text: "REV", cls: "label-rev" }
+                      : null;
+                    const multiLabel = undoneEvents.length > 1
+                      ? { text: lang === "zh" ? "多项" : "Multi", cls: "label-multi" }
+                      : null;
+
                     return (
-                      <td key={di} className={cls}
+                      <td key={di} className={cls} style={cellStyle}
                         onClick={() => { setSelectedDate(date); setSelectedWeek(null); setShowForm(false); setTransferring(null); }}>
                         <div className="cell-content">
-                          {/* Urgency corner badge */}
                           {urgency > 0 && (
                             <span className={`urgency-badge urgency-${urgency}`} title={urgency === 1 ? T.countdown1d : T.countdown3d} />
                           )}
-                          <span className={`date-num${isToday ? " today-num" : ""}`}>
-                            {formatDate(date, dateStyle)}
-                          </span>
+                          <div className="cell-top-row">
+                            <div className="cell-labels">
+                              <div>
+                                {specialLabel && <span className={`cell-label ${specialLabel.cls}`}>{specialLabel.text}</span>}
+                                {multiLabel && !specialLabel && <span className={`cell-label ${multiLabel.cls}`}>{multiLabel.text}</span>}
+                              </div>
+                              {multiLabel && specialLabel && (
+                                <div><span className={`cell-label ${multiLabel.cls}`}>{multiLabel.text}</span></div>
+                              )}
+                            </div>
+                            <span className="date-num">
+                              {isToday
+                                ? <span className="today-pill">{formatDate(date, dateStyle)}</span>
+                                : formatDate(date, dateStyle)
+                              }
+                            </span>
+                          </div>
                           <div className="dot-row">
                             {dayEvents.map(ev => (
                               <span key={ev.id} className="event-dot"
                                 style={{ background: getTypeInfo(ev.type).color, opacity: ev.done ? 0.3 : 1 }} />
                             ))}
-                            {holiday && <span style={{
-                              display:"inline-block", width:"14px", height:"4px",
-                              borderRadius:"2px", background:"#f59e0b", marginTop:"3px"
-                            }} />}
                           </div>
                         </div>
                       </td>
