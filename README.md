@@ -38,10 +38,12 @@ No installation needed. Just open the link and you're good to go.
 | REV | 复习周 / Revision week |
 | EXAM | 考试周 / Examination week |
 
+- 可以点击右上角的“中/En”切换语言 / You can click "中/En" in the upper right corner to switch languages.
 - 🟡 黄色横条 = 当天是公共假期 / Yellow bar = Public holiday
 - 彩色圆点 = 你设置的事项 / Colored dots = your deadlines
 - ⚠️ 时间设在 00:00–05:59 时会提示 **"前一天完成"**  / **Midnight warning** if due time is 00:00–05:59
 - 蓝色数字 = 距截止还有几天 / Blue number = days remaining
+- DDL在1/3天内时，日期右上角会出现橙色/蓝色三角标签 / When the deadline is within 1/3 day(s), an orange/blue triangle will appear in the upper right corner of the date.
 - **自动填充功能**：添加新事项时，若类型与课程代码与历史记录完全一致，地点与时间将自动填充。课程名称需完全相同（如同一门课填写了"Math5"与"math5"会被识别为同一门课，但"Math V"与"Math5"则不会匹配）。
   **Auto-fill**: When the event type and course name exactly match a previous entry, location and time will be pre-filled. Course names must be identical to match.
 

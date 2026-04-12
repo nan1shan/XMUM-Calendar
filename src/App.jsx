@@ -2,22 +2,113 @@ import { useState, useEffect } from "react";
 import "./App.css";
 import { supabase } from "./supabase";
 
+const LANG = {
+  zh: {
+    title: "XMUM 截止日期追踪",
+    signOut: "退出",
+    startMon: "周一开始",
+    startSun: "周日开始",
+    selectDate: "← 点击日期或周标签查看事项",
+    add: "+ 添加",
+    save: "保存",
+    update: "更新",
+    cancel: "取消",
+    location: "地点（如 A3_620、线上）",
+    course: "课程代码（如 EEE3001）",
+    title_: "标题 / 描述 *",
+    noEvents: "暂无事项 — 点添加创建",
+    holiday: "🎉 公共假期",
+    midnight: "⚠️ 凌晨截止 — 请前一天完成！",
+    midnightTag: " ⚠️ 请前一天完成",
+    midnightTransfer: "⚠️ 前一天完成",
+    dueToday: "· 今天截止",
+    daysLeft: (n) => `· 还有 ${n} 天`,
+    daysAgo: (n) => `· 已过 ${n} 天`,
+    weekPanel: (l) => `${l} · 周事项`,
+    weekNoEvents: "暂无事项 — 点添加创建",
+    weekPending: "📌 待定具体日期",
+    transferTitle: "📌 转移到具体日期",
+    transferDay: "选择周几",
+    transferLocation: "地点",
+    transferConfirm: "确认转移",
+    login: "登录账号",
+    register: "创建账号",
+    noAccount: "没有账号？",
+    hasAccount: "已有账号？",
+    toRegister: "注册",
+    toLogin: "登录",
+    loading: "加载中...",
+    email: "邮箱",
+    password: "密码（至少6位）",
+    signIn: "登录",
+    createAccount: "创建账号",
+    holidayLegend: "假期",
+    countdown1d: "倒计时1天",
+    countdown3d: "倒计时≤3天",
+    upcoming: (n, title) => `📅 ${title} 还有 ${n} 天截止`,
+  },
+  en: {
+    title: "XMUM Deadline Tracker",
+    signOut: "Sign Out",
+    startMon: "Week starts Mon",
+    startSun: "Week starts Sun",
+    selectDate: "← Select a date or week to view events",
+    add: "+ Add",
+    save: "Save",
+    update: "Update",
+    cancel: "Cancel",
+    location: "Location (e.g. A3_620, Online)",
+    course: "Course (e.g. EEE3001)",
+    title_: "Title / Description *",
+    noEvents: "No events — click + Add to create one",
+    holiday: "🎉 Public Holiday",
+    midnight: "⚠️ Midnight — finish the night before!",
+    midnightTag: " ⚠️ finish night before",
+    midnightTransfer: "⚠️ finish night before",
+    dueToday: "· Due today",
+    daysLeft: (n) => `· ${n}d left`,
+    daysAgo: (n) => `· ${n}d ago`,
+    weekPanel: (l) => `${l} · Week Events`,
+    weekNoEvents: "No events — click + Add to create one",
+    weekPending: "📌 Date TBD",
+    transferTitle: "📌 Transfer to Specific Date",
+    transferDay: "Select day",
+    transferLocation: "Location",
+    transferConfirm: "Confirm",
+    login: "Sign in to your account",
+    register: "Create a new account",
+    noAccount: "No account? ",
+    hasAccount: "Have an account? ",
+    toRegister: "Register",
+    toLogin: "Sign In",
+    loading: "Loading...",
+    email: "Email",
+    password: "Password (min 6 chars)",
+    signIn: "Sign In",
+    createAccount: "Create Account",
+    holidayLegend: "Holiday",
+    countdown1d: "Due in 1d",
+    countdown3d: "Due in ≤3d",
+    upcoming: (n, title) => `📅 ${title} due in ${n} day${n > 1 ? "s" : ""}`,
+  }
+};
+
 const SEMESTERS = [
   {
     id: "2026-Apr",
     label: "2026/04",
-    start: "2026-04-07", // Monday Apr 6
+    start: "2026-04-07",
     totalWeeks: 17,
     specialRanges: [
-      { start: "2026-07-13", end: "2026-07-19", type: "revision" }, // Mon–Fri only
-      { start: "2026-07-20", end: "2026-07-31", type: "exam" },     // Mon–Fri only
+      { start: "2026-07-13", end: "2026-07-19", type: "revision" },
+      { start: "2026-07-20", end: "2026-07-31", type: "exam" },
     ],
     holidays: ["2026-05-01", "2026-05-27", "2026-06-01", "2026-06-17"],
   },
   {
     id: "2026-Sep",
     label: "2026/09",
-    start: "2026-09-29", // Week 1 Monday
+    start: "2026-09-29",
     totalWeeks: 17,
     specialRanges: [
       { start: "2027-01-04", end: "2027-01-10", type: "revision" },
@@ -69,7 +160,6 @@ function formatDate(dateStr, style) {
   return `${mon}${dd}`;
 }
 
-// Only weekdays (Mon–Fri) get special coloring
 function getCellType(dateStr, specialRanges) {
   const dow = new Date(dateStr + "T00:00:00").getDay();
   for (const r of specialRanges) {
@@ -89,7 +179,40 @@ function getTodayUTC8() {
 
 function isMidnight(t) { return t >= "00:00" && t <= "05:59"; }
 
+/**
+ * Calculate effective days remaining, accounting for midnight deadlines.
+ * If an event has a midnight time (00:00–05:59), it effectively needs to be
+ * done the night before, so we subtract 1 from the raw diff.
+ */
+function getEffectiveDiff(dateStr, timeStr, today) {
+  const rawDiff = Math.ceil(
+    (new Date(dateStr + "T00:00:00") - new Date(today + "T00:00:00")) / 86400000
+  );
+  return isMidnight(timeStr) ? rawDiff - 1 : rawDiff;
+}
+
+/**
+ * Returns urgency level for a set of events on a given cell date:
+ *   1  → at least one event is due in exactly 1 effective day (orange)
+ *   3  → at least one event is due in 2–3 effective days (green)
+ *   0  → no urgency
+ */
+function getCellUrgency(dayEvents, date, today) {
+  const rawDiff = Math.ceil(
+    (new Date(date + "T00:00:00") - new Date(today + "T00:00:00")) / 86400000
+  );
+  let level = 0;
+  for (const ev of dayEvents) {
+    if (ev.done) continue;
+    const effectiveDiff = isMidnight(ev.time) ? rawDiff - 1 : rawDiff;
+    if (effectiveDiff === 1) return 1;           // most urgent — stop immediately
+    if (effectiveDiff >= 2 && effectiveDiff <= 3) level = 3;
+  }
+  return level;
+}
+
 export default function App() {
+  const today = getTodayUTC8();
   const [user, setUser] = useState(undefined);
   const [authMode, setAuthMode] = useState("login");
   const [authEmail, setAuthEmail] = useState("");
@@ -99,19 +222,23 @@ export default function App() {
   const [semId, setSemId]         = useState(() => localStorage.getItem("xmum_semId") || "2026-Apr");
   const [startDay, setStartDay]   = useState(() => localStorage.getItem("xmum_startDay") || "Mon");
   const [dateStyle, setDateStyle] = useState(() => localStorage.getItem("xmum_dateStyle") || "Apr10");
+  const [lang, setLang]           = useState(() => localStorage.getItem("xmum_lang") || "zh");
   const [events, setEvents]       = useState([]);
 
   const [selectedDate, setSelectedDate] = useState(null);
-  const [selectedWeek, setSelectedWeek] = useState(null); // { weekIndex, label, dates }
+  const [selectedWeek, setSelectedWeek] = useState(null);
   const [showForm, setShowForm]   = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [form, setForm] = useState({ type: "asm", course: "", title: "", location: "", time: "23:59" });
-  const [transferring, setTransferring] = useState(null); // 正在转移的 event
+  const [transferring, setTransferring] = useState(null);
   const [transferForm, setTransferForm] = useState({ dayIndex: 0, location: "", time: "23:59" });
+
+  const T = LANG[lang];
 
   useEffect(() => { localStorage.setItem("xmum_semId", semId); }, [semId]);
   useEffect(() => { localStorage.setItem("xmum_startDay", startDay); }, [startDay]);
   useEffect(() => { localStorage.setItem("xmum_dateStyle", dateStyle); }, [dateStyle]);
+  useEffect(() => { localStorage.setItem("xmum_lang", lang); }, [lang]);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -128,6 +255,17 @@ export default function App() {
     supabase.from("events").select("*").eq("user_id", user.id)
       .then(({ data }) => setEvents(data || []));
   }, [user]);
+
+  useEffect(() => {
+    if (!user || events.length === 0) return;
+    const overdue = events.filter(e =>
+      !e.done &&
+      e.date &&
+      !e.date.startsWith("WEEK:") &&
+      e.date < today
+    );
+    overdue.forEach(e => toggleDone(e.id, false));
+  }, [events, today]);
 
   async function handleAuth() {
     setAuthError("");
@@ -192,18 +330,33 @@ export default function App() {
     rows.push({ dates, label, labelClass, rowType });
   }
 
-  function getWeekEventKey(semId, weekLabel) { return `WEEK:${semId}:${weekLabel}`; }
+  function getWeekEventKey(sid, weekLabel) { return `WEEK:${sid}:${weekLabel}`; }
   function getEventsForWeek(weekLabel) { return events.filter(e => e.date === getWeekEventKey(semId, weekLabel)); }
-
   function getEventsForDate(d) { return events.filter(e => e.date === d); }
   function getTypeInfo(tid) { return EVENT_TYPES.find(t => t.id === tid) || EVENT_TYPES[EVENT_TYPES.length - 1]; }
   function getTypesForDate(date) {
-    const t = getCellType(date, sem.specialRanges);
-    if (t === "exam") return EVENT_TYPES;
+    const tp = getCellType(date, sem.specialRanges);
+    if (tp === "exam") return EVENT_TYPES;
     return EVENT_TYPES.filter(e => e.id !== "exam");
   }
 
-  const today = getTodayUTC8();
+  useEffect(() => {
+    if (!user || events.length === 0) return;
+    if (!("Notification" in window)) return;
+    Notification.requestPermission().then(perm => {
+      if (perm !== "granted") return;
+      const soon = events.filter(e => {
+        if (e.done || !e.date || e.date.startsWith("WEEK:")) return false;
+        const effectiveDiff = getEffectiveDiff(e.date, e.time, today);
+        return effectiveDiff === 1 || effectiveDiff === 3;
+      });
+      soon.forEach(e => {
+        const effectiveDiff = getEffectiveDiff(e.date, e.time, today);
+        new Notification(T.upcoming(effectiveDiff, e.title));
+      });
+    });
+  }, [user, today]);
+
   const selEvents = selectedDate ? getEventsForDate(selectedDate) : [];
   const isHoliday = selectedDate ? sem.holidays.includes(selectedDate) : false;
   const panelOpen = !!selectedDate;
@@ -211,7 +364,7 @@ export default function App() {
   // ── 加载中 ──
   if (user === undefined) return (
     <div style={{display:"flex",alignItems:"center",justifyContent:"center",height:"100vh",color:"#888"}}>
-      Loading...
+      {T.loading}
     </div>
   );
 
@@ -219,26 +372,32 @@ export default function App() {
   if (!user) return (
     <div style={{display:"flex",alignItems:"center",justifyContent:"center",height:"100vh",background:"#f5f4f0"}}>
       <div style={{background:"white",padding:"40px",borderRadius:"12px",width:"360px",boxShadow:"0 4px 20px rgba(0,0,0,0.08)"}}>
-        <h2 style={{marginBottom:"8px",fontSize:"20px"}}>📅 XMUM Deadline Tracker</h2>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"8px"}}>
+          <h2 style={{fontSize:"20px"}}>📅 XMUM</h2>
+          <button onClick={() => setLang(l => l === "zh" ? "en" : "zh")}
+            style={{background:"none",border:"1px solid #ddd",borderRadius:"6px",padding:"4px 10px",fontSize:"13px",cursor:"pointer",fontWeight:600}}>
+            {lang === "zh" ? "EN" : "中"}
+          </button>
+        </div>
         <p style={{color:"#888",fontSize:"13px",marginBottom:"24px"}}>
-          {authMode === "login" ? "Sign in to your account" : "Create a new account"}
+          {authMode === "login" ? T.login : T.register}
         </p>
-        <input type="email" placeholder="Email" value={authEmail}
+        <input type="email" placeholder={T.email} value={authEmail}
           onChange={e => setAuthEmail(e.target.value)}
           style={{width:"100%",padding:"10px 12px",borderRadius:"8px",border:"1px solid #ddd",marginBottom:"10px",fontSize:"14px"}} />
-        <input type="password" placeholder="Password (min 6 chars)" value={authPassword}
+        <input type="password" placeholder={T.password} value={authPassword}
           onChange={e => setAuthPassword(e.target.value)}
           style={{width:"100%",padding:"10px 12px",borderRadius:"8px",border:"1px solid #ddd",marginBottom:"16px",fontSize:"14px"}} />
         {authError && <p style={{color:"#e53e3e",fontSize:"12px",marginBottom:"12px"}}>{authError}</p>}
         <button onClick={handleAuth}
           style={{width:"100%",padding:"11px",background:"#2563eb",color:"white",border:"none",borderRadius:"8px",fontSize:"14px",fontWeight:"600",cursor:"pointer",marginBottom:"12px"}}>
-          {authMode === "login" ? "Sign In" : "Create Account"}
+          {authMode === "login" ? T.signIn : T.createAccount}
         </button>
         <p style={{textAlign:"center",fontSize:"13px",color:"#888"}}>
-          {authMode === "login" ? "No account? " : "Have an account? "}
+          {authMode === "login" ? T.noAccount : T.hasAccount}
           <span onClick={() => { setAuthMode(m => m === "login" ? "register" : "login"); setAuthError(""); }}
             style={{color:"#2563eb",cursor:"pointer",fontWeight:"500"}}>
-            {authMode === "login" ? "Register" : "Sign In"}
+            {authMode === "login" ? T.toRegister : T.toLogin}
           </span>
         </p>
       </div>
@@ -251,15 +410,15 @@ export default function App() {
       <div className="topbar">
         <div className="topbar-title">
           <span className="logo">📅</span>
-          XMUM Deadline Tracker
+          <span>{T.title}</span>
         </div>
         <div className="topbar-controls">
           <select value={semId} onChange={e => setSemId(e.target.value)}>
             {SEMESTERS.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
           </select>
           <select value={startDay} onChange={e => setStartDay(e.target.value)}>
-            <option value="Mon">Week starts Mon</option>
-            <option value="Sun">Week starts Sun</option>
+            <option value="Mon">{T.startMon}</option>
+            <option value="Sun">{T.startSun}</option>
           </select>
           <select value={dateStyle} onChange={e => setDateStyle(e.target.value)}>
             <option value="Apr10">Apr10</option>
@@ -268,26 +427,39 @@ export default function App() {
             <option value="10 Apr">10 Apr</option>
             <option value="M月D日">M月D日</option>
           </select>
+          <button onClick={() => setLang(l => l === "zh" ? "en" : "zh")}
+            style={{background:"none",border:"1px solid var(--border)",borderRadius:"6px",padding:"6px 12px",fontSize:"13px",cursor:"pointer",color:"var(--text-muted)",fontWeight:600}}>
+            {lang === "zh" ? "EN" : "中"}
+          </button>
           <button onClick={() => supabase.auth.signOut()}
             style={{background:"none",border:"1px solid var(--border)",borderRadius:"6px",padding:"6px 12px",fontSize:"13px",cursor:"pointer",color:"var(--text-muted)"}}>
-            Sign Out
+            {T.signOut}
           </button>
         </div>
       </div>
 
       {/* LEGEND */}
       <div className="legend">
-        {EVENT_TYPES.map(t => (
-          <span key={t.id} className="legend-item">
-            <span className="legend-dot" style={{ background: t.color }} />{t.label}
+        {EVENT_TYPES.map(tp => (
+          <span key={tp.id} className="legend-item">
+            <span className="legend-dot" style={{ background: tp.color }} />{tp.label}
           </span>
         ))}
         <span className="legend-item">
-          <span style={{ display:"inline-block", width:"14px", height:"4px", borderRadius:"2px", background:"#f59e0b" }} />Holiday
+          <span style={{ display:"inline-block", width:"14px", height:"4px", borderRadius:"2px", background:"#f59e0b" }} />{T.holidayLegend}
+        </span>
+        {/* Countdown warning legend items */}
+        <span className="legend-item">
+          <span className="legend-dot" style={{ background: "#f97316" }} />
+          <span style={{ color: "#f97316", fontWeight: 600 }}>{T.countdown1d}</span>
+        </span>
+        <span className="legend-item">
+          <span className="legend-dot" style={{ background: "#22c55e" }} />
+          <span style={{ color: "#22c55e", fontWeight: 600 }}>{T.countdown3d}</span>
         </span>
       </div>
 
-      <div className={`main ${panelOpen ? "panel-open" : "panel-closed"}`}>
+      <div className={`main ${panelOpen || selectedWeek ? "panel-open" : "panel-closed"}`}>
         {/* CALENDAR */}
         <div className="calendar-wrap">
           <table className="cal-table">
@@ -321,6 +493,8 @@ export default function App() {
                     const holiday = sem.holidays.includes(date);
                     const isSelected = selectedDate === date;
                     const isToday = date === today;
+                    // Determine urgency badge level for this cell
+                    const urgency = getCellUrgency(dayEvents, date, today);
                     let cls = "cal-cell";
                     if (isWknd)                  cls += " weekend";
                     if (cellType === "revision")  cls += " revision";
@@ -329,8 +503,12 @@ export default function App() {
                     if (isSelected)               cls += " selected";
                     return (
                       <td key={di} className={cls}
-                        onClick={() => { setSelectedDate(date); setShowForm(false); }}>
+                        onClick={() => { setSelectedDate(date); setSelectedWeek(null); setShowForm(false); setTransferring(null); }}>
                         <div className="cell-content">
+                          {/* Urgency corner badge */}
+                          {urgency > 0 && (
+                            <span className={`urgency-badge urgency-${urgency}`} title={urgency === 1 ? T.countdown1d : T.countdown3d} />
+                          )}
                           <span className={`date-num${isToday ? " today-num" : ""}`}>
                             {formatDate(date, dateStyle)}
                           </span>
@@ -362,9 +540,9 @@ export default function App() {
           {transferring && (
             <div style={{ padding:"16px", borderBottom:"1px solid var(--border)", background:"#fffbeb" }}>
               <div style={{ fontWeight:600, fontSize:"13px", marginBottom:"12px" }}>
-                📌 转移事项到具体日期
+                {T.transferTitle}
               </div>
-              <div style={{ marginBottom:"8px", fontSize:"12px", color:"var(--text-muted)" }}>选择周几</div>
+              <div style={{ marginBottom:"8px", fontSize:"12px", color:"var(--text-muted)" }}>{T.transferDay}</div>
               <select
                 value={transferForm.dayIndex}
                 onChange={e => setTransferForm(f => ({ ...f, dayIndex: parseInt(e.target.value) }))}
@@ -376,14 +554,14 @@ export default function App() {
                   </option>
                 ))}
               </select>
-              <input placeholder="地点 Location" value={transferForm.location}
+              <input placeholder={T.transferLocation} value={transferForm.location}
                 onChange={e => setTransferForm(f => ({ ...f, location: e.target.value }))}
                 style={{ width:"100%", padding:"7px 10px", borderRadius:"7px", border:"1px solid var(--border)", marginBottom:"8px", fontSize:"13px" }} />
               <div style={{ display:"flex", gap:"6px", marginBottom:"8px" }}>
                 <input type="time" value={transferForm.time}
                   onChange={e => setTransferForm(f => ({ ...f, time: e.target.value }))}
                   style={{ flex:1, padding:"7px 10px", borderRadius:"7px", border:"1px solid var(--border)", fontSize:"13px" }} />
-                {isMidnight(transferForm.time) && <span style={{ fontSize:"11px", color:"#ea580c", alignSelf:"center" }}>⚠️ 前一天完成</span>}
+                {isMidnight(transferForm.time) && <span style={{ fontSize:"11px", color:"#ea580c", alignSelf:"center" }}>⚠️ {T.midnightTransfer}</span>}
               </div>
               <div style={{ display:"flex", gap:"8px" }}>
                 <button onClick={async () => {
@@ -394,11 +572,11 @@ export default function App() {
                   setSelectedDate(newDate);
                   setSelectedWeek(null);
                 }} style={{ flex:1, padding:"8px", background:"#2563eb", color:"white", border:"none", borderRadius:"7px", fontSize:"13px", fontWeight:600, cursor:"pointer" }}>
-                  确认转移
+                  {T.transferConfirm}
                 </button>
                 <button onClick={() => setTransferring(null)}
                   style={{ padding:"8px 14px", background:"var(--surface2)", border:"1px solid var(--border)", borderRadius:"7px", fontSize:"13px", cursor:"pointer" }}>
-                  取消
+                  {T.cancel}
                 </button>
               </div>
             </div>
@@ -408,13 +586,13 @@ export default function App() {
           {selectedWeek && !transferring && (
             <>
               <div className="panel-header">
-                <div className="panel-date">{selectedWeek.label} · 周事项</div>
+                <div className="panel-date">{T.weekPanel(selectedWeek.label)}</div>
                 <div style={{ display:"flex", gap:"6px" }}>
                   <button className="add-btn" onClick={() => {
                     setShowForm(f => !f);
                     setEditingId(null);
                     setForm({ type: "asm", course: "", title: "", location: "", time: "23:59" });
-                  }}>{showForm ? "✕" : "+ Add"}</button>
+                  }}>{showForm ? "✕" : T.add}</button>
                   <button className="close-btn" onClick={() => { setSelectedWeek(null); setShowForm(false); }}>✕</button>
                 </div>
               </div>
@@ -422,13 +600,13 @@ export default function App() {
               {showForm && (
                 <div className="add-form">
                   <select value={form.type} onChange={e => setForm(f => ({ ...f, type: e.target.value }))}>
-                    {getTypesForDate(selectedWeek.dates[2]).map(t => (
-                      <option key={t.id} value={t.id}>{t.label}</option>
+                    {getTypesForDate(selectedWeek.dates[2]).map(tp => (
+                      <option key={tp.id} value={tp.id}>{tp.label}</option>
                     ))}
                   </select>
-                  <input placeholder="Course (e.g. EEE3001)" value={form.course}
+                  <input placeholder={T.course} value={form.course}
                     onChange={e => setForm(f => ({ ...f, course: e.target.value }))} />
-                  <input placeholder="Title / Description *" value={form.title}
+                  <input placeholder={T.title_} value={form.title}
                     onChange={e => setForm(f => ({ ...f, title: e.target.value }))} />
                   <button className="save-btn" onClick={async () => {
                     if (!form.title.trim() || !user) return;
@@ -444,35 +622,35 @@ export default function App() {
                     }
                     setForm({ type: "asm", course: "", title: "", location: "", time: "23:59" });
                     setShowForm(false);
-                  }}>{editingId ? "Update" : "Save"}</button>
+                  }}>{editingId ? T.update : T.save}</button>
                 </div>
               )}
 
               <div className="event-list">
                 {getEventsForWeek(selectedWeek.label).length === 0 && !showForm && (
-                  <div className="no-events">暂无事项 — 点 + Add 添加</div>
+                  <div className="no-events">{T.weekNoEvents}</div>
                 )}
                 {getEventsForWeek(selectedWeek.label).map(ev => {
-                  const t = getTypeInfo(ev.type);
+                  const tp = getTypeInfo(ev.type);
                   return (
                     <div key={ev.id} className="event-card">
-                      <div className="event-card-left" style={{ borderColor: t.color }}>
-                        <span className="event-type-badge" style={{ background: t.color + "22", color: t.color }}>{t.label}</span>
+                      <div className="event-card-left" style={{ borderColor: tp.color }}>
+                        <span className="event-type-badge" style={{ background: tp.color + "22", color: tp.color }}>{tp.label}</span>
                         <div className="event-title">{ev.title}</div>
                         {ev.course && <div className="event-meta">📚 {ev.course}</div>}
-                        <div style={{ fontSize:"11px", color:"#f59e0b", marginTop:"4px" }}>📌 待定具体日期</div>
+                        <div style={{ fontSize:"11px", color:"#f59e0b", marginTop:"4px" }}>{T.weekPending}</div>
                       </div>
                       <div className="event-actions">
-                        <button title="转移到具体日期" onClick={() => {
+                        <button title={T.transferTitle} onClick={() => {
                           setTransferring(ev);
                           setTransferForm({ dayIndex: 0, location: "", time: "23:59" });
                         }}>📅</button>
-                        <button title="编辑" onClick={() => {
+                        <button title={T.update} onClick={() => {
                           setForm({ type: ev.type, course: ev.course, title: ev.title, location: "", time: "" });
                           setEditingId(ev.id);
                           setShowForm(true);
                         }}>✏️</button>
-                        <button title="删除" onClick={() => deleteEvent(ev.id)}>🗑</button>
+                        <button onClick={() => deleteEvent(ev.id)}>🗑</button>
                       </div>
                     </div>
                   );
@@ -486,21 +664,23 @@ export default function App() {
             <>
               {!panelOpen ? (
                 <div className="no-events" style={{ padding:"40px 20px", textAlign:"center", color:"var(--text-faint, #a8a29e)", fontSize:"13px" }}>
-                  ← 点击日期或周标签查看事项
+                  {T.selectDate}
                 </div>
               ) : (
                 <>
                   <div className="panel-header">
                     <div>
                       <div className="panel-date">
-                        {new Date(selectedDate + "T00:00:00").toLocaleDateString("en-GB",
-                          { weekday: "long", year: "numeric", month: "long", day: "numeric" })}
+                        {new Date(selectedDate + "T00:00:00").toLocaleDateString(
+                          lang === "zh" ? "zh-CN" : "en-GB",
+                          { weekday: "long", year: "numeric", month: "long", day: "numeric" }
+                        )}
                       </div>
-                      {isHoliday && <div className="holiday-badge">🎉 Public Holiday</div>}
+                      {isHoliday && <div className="holiday-badge">{T.holiday}</div>}
                     </div>
                     <div style={{ display: "flex", gap: "6px" }}>
                       <button className="add-btn" onClick={() => { setShowForm(f => !f); setEditingId(null); setForm({ type: "asm", course: "", title: "", location: "", time: "23:59" }); }}>
-                        {showForm ? "✕" : "+ Add"}
+                        {showForm ? "✕" : T.add}
                       </button>
                       <button className="close-btn" onClick={() => { setSelectedDate(null); setShowForm(false); }}>✕</button>
                     </div>
@@ -515,11 +695,11 @@ export default function App() {
                           return { ...f, type: newType, location: match ? match.location : f.location, time: match ? match.time : f.time };
                         });
                       }}>
-                        {getTypesForDate(selectedDate).map(t => (
-                          <option key={t.id} value={t.id}>{t.label}</option>
+                        {getTypesForDate(selectedDate).map(tp => (
+                          <option key={tp.id} value={tp.id}>{tp.label}</option>
                         ))}
                       </select>
-                      <input placeholder="Course (e.g. EEE3001)" value={form.course}
+                      <input placeholder={T.course} value={form.course}
                         onChange={e => {
                           const newCourse = e.target.value;
                           setForm(f => {
@@ -527,42 +707,55 @@ export default function App() {
                             return { ...f, course: newCourse, location: match ? match.location : f.location, time: match ? match.time : f.time };
                           });
                         }} />
-                      <input placeholder="Title / Description *" value={form.title}
+                      <input placeholder={T.title_} value={form.title}
                         onChange={e => setForm(f => ({ ...f, title: e.target.value }))} />
-                      <input placeholder="Location (e.g. A3_620, Online)" value={form.location}
+                      <input placeholder={T.location} value={form.location}
                         onChange={e => setForm(f => ({ ...f, location: e.target.value }))} />
                       <div className="time-row">
                         <input type="time" value={form.time}
                           onChange={e => setForm(f => ({ ...f, time: e.target.value }))} />
                         {isMidnight(form.time) && (
-                          <span className="midnight-warn">⚠️ Midnight — finish the night before!</span>
+                          <span className="midnight-warn">{T.midnight}</span>
                         )}
                       </div>
-                      <button className="save-btn" onClick={addEvent}>{editingId ? "Update" : "Save"}</button>
+                      <button className="save-btn" onClick={addEvent}>{editingId ? T.update : T.save}</button>
                     </div>
                   )}
 
                   <div className="event-list">
                     {selEvents.length === 0 && !showForm && (
-                      <div className="no-events">No events — click + Add to create one</div>
+                      <div className="no-events">{T.noEvents}</div>
                     )}
                     {selEvents.map(ev => {
-                      const t = getTypeInfo(ev.type);
+                      const tp = getTypeInfo(ev.type);
+                      const effectiveDiff = getEffectiveDiff(ev.date, ev.time, today);
                       return (
                         <div key={ev.id} className={`event-card ${ev.done ? "done" : ""}`}>
-                          <div className="event-card-left" style={{ borderColor: t.color }}>
-                            <span className="event-type-badge" style={{ background: t.color + "22", color: t.color }}>{t.label}</span>
+                          <div className="event-card-left" style={{ borderColor: tp.color }}>
+                            <span className="event-type-badge" style={{ background: tp.color + "22", color: tp.color }}>{tp.label}</span>
                             <div className="event-title">{ev.title}</div>
                             {ev.course   && <div className="event-meta">📚 {ev.course}</div>}
                             {ev.location && <div className="event-meta">📍 {ev.location}</div>}
                             <div className="event-time">
                               🕐 {ev.time}
-                              {isMidnight(ev.time) && <span className="midnight-tag"> ⚠️ finish night before</span>}
-                              {(() => {
-                                const diff = Math.ceil((new Date(ev.date + "T00:00:00") - new Date(today + "T00:00:00")) / 86400000);
-                                if (diff > 0) return <span style={{marginLeft:"6px", color:"#2563eb", fontWeight:"600"}}>· {diff}d left</span>;
-                                if (diff === 0) return <span style={{marginLeft:"6px", color:"#ea580c", fontWeight:"600"}}>· Due today</span>;
-                                return <span style={{marginLeft:"6px", color:"#94a3b8", fontWeight:"600"}}>· {Math.abs(diff)}d ago</span>;
+                              {isMidnight(ev.time) && <span className="midnight-tag">{T.midnightTag}</span>}
+                              {/* Countdown with midnight-adjusted diff and color coding */}
+                              {!ev.done && (() => {
+                                if (effectiveDiff === 1) return (
+                                  <span className="countdown countdown-1d">⚠️ {T.daysLeft(1)}</span>
+                                );
+                                if (effectiveDiff >= 2 && effectiveDiff <= 3) return (
+                                  <span className="countdown countdown-3d">✅ {T.daysLeft(effectiveDiff)}</span>
+                                );
+                                if (effectiveDiff > 3) return (
+                                  <span className="countdown countdown-ok">{T.daysLeft(effectiveDiff)}</span>
+                                );
+                                if (effectiveDiff === 0) return (
+                                  <span className="countdown countdown-today">{T.dueToday}</span>
+                                );
+                                return (
+                                  <span className="countdown countdown-past">{T.daysAgo(Math.abs(effectiveDiff))}</span>
+                                );
                               })()}
                             </div>
                           </div>

@@ -96,6 +96,7 @@ body {
   transition: background 0.1s;
   background: var(--surface);
   padding: 6px;
+  position: relative; /* needed for urgency badge */
 }
 .cell-content {
   display: flex; flex-direction: column;
@@ -127,6 +128,45 @@ body {
   align-self: flex-start;
 }
 .event-dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; }
+
+/* ── URGENCY CORNER BADGE ──────────────────────────────────────────
+   A small triangle clipped into the top-right corner of the cell.
+   urgency-1 = 1 day left → orange
+   urgency-3 = 2–3 days left → green
+   ─────────────────────────────────────────────────────────────── */
+.urgency-badge {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 0;
+  height: 0;
+  border-style: solid;
+  /* top-right triangle: top border colored, right border colored */
+  border-width: 0 13px 13px 0;
+  border-color: transparent;
+  pointer-events: none;
+  transition: opacity 0.15s;
+}
+.urgency-badge.urgency-1 {
+  /* orange triangle */
+  border-right-color: #f97316;
+}
+.urgency-badge.urgency-3 {
+  /* green triangle */
+  border-right-color: #22c55e;
+}
+
+/* ── COUNTDOWN LABELS in event card ────────────────────────────── */
+.countdown {
+  margin-left: 6px;
+  font-weight: 700;
+  font-size: 11px;
+}
+.countdown-1d    { color: #f97316; }   /* orange  — 1 day  */
+.countdown-3d    { color: #16a34a; }   /* green   — 2–3 days */
+.countdown-ok    { color: #2563eb; font-weight: 600; }  /* blue — >3 days */
+.countdown-today { color: #ea580c; }   /* red-orange — due today */
+.countdown-past  { color: #94a3b8; font-weight: 600; }  /* gray — overdue */
 
 /* RIGHT PANEL */
 .panel {
@@ -270,6 +310,8 @@ body {
   .cal-cell { height: 56px; padding: 4px 3px; }
   .date-num { font-size: 10px; }
   .event-dot { width: 6px; height: 6px; }
+  /* Smaller badge on mobile */
+  .urgency-badge { border-width: 0 10px 10px 0; }
 
   /* 面板变成底部弹出层 */
   .panel {
