@@ -1,6 +1,6 @@
 # 📅 XMUM Deadline Tracker
 
-本项目为针对厦门大学马来西亚分校学生课业场景而设计的截止日期追踪工具。有别于传统月份日历，以学期周次为轴线，让你在一个视图内掌握全学期的作业、测验、考试等各类事项，同时可充当以学期划分的校历。
+本项目为针对厦门大学马来西亚分校学生实际课业场景中，课程事项繁多而缺乏合适的日历记录，以及在相册中查找校历效率低的问题而设计的截止日期追踪工具。有别于传统月份日历，以学期周次为轴线，让你在一个视图内掌握全学期的作业、测验、考试等各类事项，同时可充当以学期划分的校历。
 
 A deadline tracker built for XMUM students. Unlike conventional monthly calendars, it organizes your semester by week number — so you can see assignments, quizzes, exams, and more across the entire semester at a glance.
 
@@ -47,16 +47,6 @@ No installation needed. Just open the link and you're good to go.
 - **自动填充功能**：添加新事项时，若类型与课程代码与历史记录完全一致，地点与时间将自动填充。课程名称需完全相同（如同一门课填写了"Math5"与"math5"会被识别为同一门课，但"Math V"与"Math5"则不会匹配）。
   **Auto-fill**: When the event type and course name exactly match a previous entry, location and time will be pre-filled. Course names must be identical to match.
 
-
----
-
-## 隐私说明 / Privacy
-
-- 账号**仅用于区分不同用户的数据**，不会收集任何个人信息
-- Your account is used **only to keep your data separate from other users**. No personal data is collected or shared.
-- 存储内容仅包括你填写的课程、标题、地点、时间等截止日期信息
-- Only your deadline entries (course, title, location, time) are stored.
-
 ---
 
 ## 周事项（待定日期）/ Week-level Events
@@ -77,6 +67,45 @@ Sometimes a deadline is announced by week but not yet scheduled to a specific da
 
 **注意 / Note:** 转移后事项将出现在对应日期，原周事项自动移除。
 After transfer, the event will appear on the specific date and be removed from the week panel.
+
+---
+
+## 分享事项 / Share Events
+
+你可以将自己的事项一键分享给课程完全或者部分相同的同学，对方打开网站即可看到你分享的内容。
+
+You can share your events directly to a classmate's account — they'll see the events as soon as they open the app.
+
+**如何使用 / How to use:**
+1. 点击顶栏的 **分享 / Share** 按钮
+   Click the **Share** button in the top bar
+2. 填写对方的注册邮箱（需已注册账号）
+   Enter the recipient's registered email (they must have an account)
+3. 选择分享范围：全部学期、当前学期、或指定日期范围
+   Choose the range: all semesters, current semester, or specific dates
+4. 可选：筛选只分享某些类型的事项（如只分享作业和测验）；留言功能
+   Optional: filter by event type (e.g. only assignments and quizzes), and message function
+5. 点击确认，对方账号中将收到接受请求
+   Click confirm — the recipient's account will receive an acceptance request.
+
+**注意 / Note:**
+- 分享的是当前事项的副本，分享后双方数据互不影响
+  Shared events are copied — changes made by either party will not affect the other
+- 只分享具体日期的事项，待定周事项不会被分享
+  Only date-specific events are shared; week-level pending events are excluded
+- 对方邮箱必须与注册时使用的邮箱完全一致
+  The recipient's email must exactly match their registered email
+
+---
+
+## 隐私说明 / Privacy
+
+- 账号**仅用于区分不同用户的数据**，不会收集任何个人信息
+- Your account is used **only to keep your data separate from other users**. No personal data is collected or shared.
+- 存储内容仅包括你填写的课程、标题、地点、时间等截止日期信息
+- Only your deadline entries (course, title, location, time) are stored.
+
+---
 
 ## 更新说明 / Updates
 

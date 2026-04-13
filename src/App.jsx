@@ -46,6 +46,33 @@ const LANG = {
     countdown1d: "倒计时1天",
     countdown3d: "倒计时≤3天",
     upcoming: (n, title) => `📅 ${title} 还有 ${n} 天截止`,
+    share: "分享",
+    shareTitle: "分享事项给他人",
+    shareEmail: "对方邮箱",
+    shareRange: "选择范围",
+    shareAll: "全部学期",
+    shareSem: "当前学期",
+    shareWeek: "指定日期段",
+    shareFrom: "从",
+    shareTo: "到",
+    shareAddRange: "+ 添加时间段",
+    shareRemoveRange: "删除",
+    shareTypes: "筛选类型（不选则全部）",
+    shareConfirm: "确认分享",
+    shareSuccess: "分享成功！",
+    shareNotFound: "找不到该用户",
+    shareError: "分享失败，请重试",
+    shareSelf: "不能分享给自己",
+    inbox: "收件箱",
+    inboxEmpty: "暂无待处理的分享",
+    inboxFrom: "来自",
+    inboxCount: (n) => `${n} 项事项`,
+    inboxAccept: "接受",
+    inboxReject: "拒绝",
+    inboxAccepted: "已接受",
+    inboxRejected: "已拒绝",
+    sharePending: "等待对方确认",
+    shareNote: "留言（可选）",
   },
   en: {
     title: "XMUM Deadline Tracker",
@@ -90,6 +117,33 @@ const LANG = {
     countdown1d: "Due in 1d",
     countdown3d: "Due in ≤3d",
     upcoming: (n, title) => `📅 ${title} due in ${n} day${n > 1 ? "s" : ""}`,
+    share: "Share",
+    shareTitle: "Share Events",
+    shareEmail: "Recipient email",
+    shareRange: "Select range",
+    shareAll: "All semesters",
+    shareSem: "Current semester",
+    shareWeek: "Date ranges",
+    shareFrom: "From",
+    shareTo: "To",
+    shareAddRange: "+ Add range",
+    shareRemoveRange: "Remove",
+    shareTypes: "Filter by type (leave empty = all)",
+    shareConfirm: "Share",
+    shareSuccess: "Shared successfully!",
+    shareNotFound: "User not found",
+    shareError: "Failed to share, please try again",
+    shareSelf: "Cannot share with yourself",
+    inbox: "Inbox",
+    inboxEmpty: "No pending shares",
+    inboxFrom: "From",
+    inboxCount: (n) => `${n} event${n > 1 ? "s" : ""}`,
+    inboxAccept: "Accept",
+    inboxReject: "Reject",
+    inboxAccepted: "Accepted",
+    inboxRejected: "Rejected",
+    sharePending: "Waiting for recipient",
+    shareNote: "Note (optional)",
   }
 };
 
@@ -232,6 +286,15 @@ export default function App() {
   const [form, setForm] = useState({ type: "asm", course: "", title: "", location: "", time: "23:59" });
   const [transferring, setTransferring] = useState(null);
   const [transferForm, setTransferForm] = useState({ dayIndex: 0, location: "", time: "23:59" });
+  const [showShare, setShowShare] = useState(false);
+  const [shareEmail, setShareEmail] = useState("");
+  const [shareRange, setShareRange] = useState("sem");
+  const [shareDateRanges, setShareDateRanges] = useState([{ from: "", to: "" }]);
+  const [shareSelectedTypes, setShareSelectedTypes] = useState([]);
+  const [shareStatus, setShareStatus] = useState("");
+  const [shareNote, setShareNote] = useState("");
+  const [showInbox, setShowInbox] = useState(false);
+  const [inboxItems, setInboxItems] = useState([]);
 
   const T = LANG[lang];
 
@@ -306,6 +369,69 @@ export default function App() {
   async function deleteEvent(id) {
     await supabase.from("events").delete().eq("id", id);
     setEvents(prev => prev.filter(e => e.id !== id));
+  }
+
+  useEffect(() => {
+    if (!user) return;
+    supabase.from("shared_events")
+      .select("*")
+      .eq("to_user_id", user.id)
+      .order("created_at", { ascending: false })
+      .then(({ data }) => setInboxItems(data || []));
+  }, [user]);
+
+  async function shareEvents() {
+    setShareStatus("loading");
+    if (shareEmail.trim().toLowerCase() === user.email.toLowerCase()) {
+      setShareStatus("self"); return;
+    }
+    const { data: profile } = await supabase
+      .from("profiles").select("id").eq("email", shareEmail.trim()).single();
+    if (!profile) { setShareStatus("notfound"); return; }
+    let toShare = events.filter(e => !e.date.startsWith("WEEK:"));
+    if (shareRange === "sem") {
+      const sem_ = SEMESTERS.find(s => s.id === semId);
+      toShare = toShare.filter(e => e.date >= sem_.start);
+    } else if (shareRange === "week") {
+      const validRanges = shareDateRanges.filter(r => r.from && r.to && r.from <= r.to);
+      if (validRanges.length > 0) {
+        toShare = toShare.filter(e => validRanges.some(r => e.date >= r.from && e.date <= r.to));
+      }
+    }
+    if (shareSelectedTypes.length > 0) {
+      toShare = toShare.filter(e => shareSelectedTypes.includes(e.type));
+    }
+    if (toShare.length === 0) { setShareStatus("error"); return; }
+    const { error } = await supabase.from("shared_events").insert({
+      from_user_id: user.id,
+      to_user_id: profile.id,
+      from_email: user.email,
+      note: shareNote.trim(),
+      events_data: toShare.map(e => ({
+        date: e.date, type: e.type, course: e.course,
+        title: e.title, location: e.location, time: e.time,
+      })),
+    });
+    setShareStatus(error ? "error" : "success");
+  }
+
+  async function acceptShare(item) {
+    const copies = item.events_data.map(e => ({
+      user_id: user.id, done: false, ...e,
+    }));
+    const { error } = await supabase.from("events").insert(copies);
+    if (!error) {
+      await supabase.from("shared_events").update({ status: "accepted" }).eq("id", item.id);
+      setInboxItems(prev => prev.map(i => i.id === item.id ? { ...i, status: "accepted" } : i));
+      setEvents(prev => [...prev, ...copies.map((e, idx) => ({ ...e, id: `tmp_${idx}` }))]);
+      supabase.from("events").select("*").eq("user_id", user.id)
+        .then(({ data }) => setEvents(data || []));
+    }
+  }
+
+  async function rejectShare(item) {
+    await supabase.from("shared_events").update({ status: "rejected" }).eq("id", item.id);
+    setInboxItems(prev => prev.map(i => i.id === item.id ? { ...i, status: "rejected" } : i));
   }
 
   const sem = SEMESTERS.find(s => s.id === semId) || SEMESTERS[0];
@@ -434,6 +560,17 @@ export default function App() {
             style={{background:"none",border:"1px solid var(--border)",borderRadius:"6px",padding:"6px 12px",fontSize:"13px",cursor:"pointer",color:"var(--text-muted)",fontWeight:600}}>
             {lang === "zh" ? "EN" : "中"}
           </button>
+          <button onClick={() => setShowInbox(s => !s)}
+            style={{background:"none",border:"1px solid var(--border)",borderRadius:"6px",padding:"6px 12px",fontSize:"13px",cursor:"pointer",color:"var(--text-muted)",position:"relative"}}>
+            {T.inbox}
+            {inboxItems.filter(i => i.status === "pending").length > 0 && (
+              <span style={{position:"absolute",top:"-4px",right:"-4px",width:"8px",height:"8px",borderRadius:"50%",background:"#ef4444"}} />
+            )}
+          </button>
+          <button onClick={() => { setShowShare(s => !s); setShareStatus(""); }}
+            style={{background:"none",border:"1px solid var(--border)",borderRadius:"6px",padding:"6px 12px",fontSize:"13px",cursor:"pointer",color:"var(--text-muted)"}}>
+            {T.share}
+          </button>
           <button onClick={() => supabase.auth.signOut()}
             style={{background:"none",border:"1px solid var(--border)",borderRadius:"6px",padding:"6px 12px",fontSize:"13px",cursor:"pointer",color:"var(--text-muted)"}}>
             {T.signOut}
@@ -462,6 +599,147 @@ export default function App() {
           <span style={{ color: "#22c55e", fontWeight: 600 }}>{T.countdown3d}</span>
         </span>
       </div>
+
+      {showShare && (
+        <div className="share-overlay" onClick={e => { if (e.target === e.currentTarget) setShowShare(false); }}>
+          <div className="share-modal">
+            <div style={{fontWeight:700, fontSize:"15px", marginBottom:"16px"}}>{T.shareTitle}</div>
+            <input placeholder={T.shareEmail} value={shareEmail}
+              onChange={e => { setShareEmail(e.target.value); setShareStatus(""); }}
+              style={{width:"100%",padding:"8px 10px",borderRadius:"7px",border:"1px solid var(--border)",marginBottom:"10px",fontSize:"13px"}} />
+            <div style={{fontSize:"12px",color:"var(--text-muted)",marginBottom:"6px"}}>{T.shareRange}</div>
+            <div style={{display:"flex",gap:"6px",marginBottom:"10px"}}>
+              {["all","sem","week"].map(r => (
+                <button key={r} onClick={() => setShareRange(r)}
+                  style={{flex:1,padding:"6px",borderRadius:"6px",border:"1px solid var(--border)",cursor:"pointer",fontSize:"12px",
+                    background: shareRange === r ? "var(--accent)" : "none",
+                    color: shareRange === r ? "white" : "var(--text-sub)"}}>
+                  {T[`share${r.charAt(0).toUpperCase()+r.slice(1)}`]}
+                </button>
+              ))}
+            </div>
+            {shareRange === "week" && (
+              <div style={{marginBottom:"10px"}}>
+                {shareDateRanges.map((range, idx) => (
+                  <div key={idx} style={{display:"flex",gap:"6px",alignItems:"center",marginBottom:"6px",flexWrap:"wrap"}}>
+                    <span style={{fontSize:"12px",color:"var(--text-muted)",whiteSpace:"nowrap"}}>{T.shareFrom}</span>
+                    <input type="date" value={range.from}
+                      onChange={e => setShareDateRanges(prev => prev.map((r,i) => i===idx ? {...r, from: e.target.value} : r))}
+                      style={{flex:1,minWidth:"120px",padding:"5px 8px",borderRadius:"6px",border:"1px solid var(--border)",fontSize:"12px"}} />
+                    <span style={{fontSize:"12px",color:"var(--text-muted)",whiteSpace:"nowrap"}}>{T.shareTo}</span>
+                    <input type="date" value={range.to}
+                      onChange={e => setShareDateRanges(prev => prev.map((r,i) => i===idx ? {...r, to: e.target.value} : r))}
+                      style={{flex:1,minWidth:"120px",padding:"5px 8px",borderRadius:"6px",border:"1px solid var(--border)",fontSize:"12px"}} />
+                    {shareDateRanges.length > 1 && (
+                      <button onClick={() => setShareDateRanges(prev => prev.filter((_,i) => i!==idx))}
+                        style={{padding:"4px 8px",borderRadius:"6px",border:"1px solid var(--border)",fontSize:"11px",cursor:"pointer",color:"#e53e3e",background:"none",whiteSpace:"nowrap"}}>
+                        {T.shareRemoveRange}
+                      </button>
+                    )}
+                  </div>
+                ))}
+                <button onClick={() => setShareDateRanges(prev => [...prev, { from: "", to: "" }])}
+                  style={{fontSize:"12px",color:"var(--accent)",background:"none",border:"none",cursor:"pointer",padding:"2px 0",fontWeight:600}}>
+                  {T.shareAddRange}
+                </button>
+              </div>
+            )}
+            <div style={{fontSize:"12px",color:"var(--text-muted)",marginBottom:"6px"}}>{T.shareTypes}</div>
+            <div style={{display:"flex",flexWrap:"wrap",gap:"5px",marginBottom:"14px"}}>
+              {EVENT_TYPES.filter(t => t.id !== "exam").map(t => (
+                <button key={t.id} onClick={() => setShareSelectedTypes(prev =>
+                  prev.includes(t.id) ? prev.filter(x => x !== t.id) : [...prev, t.id]
+                )} style={{padding:"3px 8px",borderRadius:"12px",border:`1px solid ${t.color}`,cursor:"pointer",fontSize:"11px",fontWeight:600,
+                  background: shareSelectedTypes.includes(t.id) ? t.color : "none",
+                  color: shareSelectedTypes.includes(t.id) ? "white" : t.color}}>
+                  {t.label}
+                </button>
+              ))}
+            </div>
+            <textarea placeholder={T.shareNote} value={shareNote}
+              onChange={e => setShareNote(e.target.value)}
+              rows={2}
+              style={{width:"100%",padding:"8px 10px",borderRadius:"7px",border:"1px solid var(--border)",
+                marginBottom:"12px",fontSize:"13px",resize:"none",fontFamily:"inherit"}} />
+            {shareStatus === "success"  && <div style={{color:"#16a34a",fontSize:"12px",marginBottom:"8px"}}>✓ {T.shareSuccess}</div>}
+            {shareStatus === "notfound" && <div style={{color:"#e53e3e",fontSize:"12px",marginBottom:"8px"}}>✕ {T.shareNotFound}</div>}
+            {shareStatus === "error"    && <div style={{color:"#e53e3e",fontSize:"12px",marginBottom:"8px"}}>✕ {T.shareError}</div>}
+            {shareStatus === "self"     && <div style={{color:"#e53e3e",fontSize:"12px",marginBottom:"8px"}}>✕ {T.shareSelf}</div>}
+            <div style={{display:"flex",gap:"8px"}}>
+              <button onClick={shareEvents} disabled={shareStatus==="loading"}
+                style={{flex:1,padding:"9px",background:"var(--accent)",color:"white",border:"none",borderRadius:"7px",fontSize:"13px",fontWeight:600,cursor:"pointer"}}>
+                {shareStatus === "loading" ? "..." : T.shareConfirm}
+              </button>
+              <button onClick={() => setShowShare(false)}
+                style={{padding:"9px 14px",background:"none",border:"1px solid var(--border)",borderRadius:"7px",fontSize:"13px",cursor:"pointer"}}>
+                {T.cancel}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showInbox && (
+        <div className="share-overlay" onClick={e => { if (e.target === e.currentTarget) setShowInbox(false); }}>
+          <div className="share-modal">
+            <div style={{fontWeight:700, fontSize:"15px", marginBottom:"16px"}}>{T.inbox}</div>
+            {inboxItems.length === 0 && (
+              <div style={{color:"var(--text-faint)",fontSize:"13px",textAlign:"center",padding:"20px 0"}}>{T.inboxEmpty}</div>
+            )}
+            {inboxItems.map(item => (
+              <div key={item.id} style={{padding:"12px",borderRadius:"9px",border:"1px solid var(--border)",marginBottom:"8px",background:"var(--surface2)"}}>
+                <div style={{fontSize:"12px",color:"var(--text-muted)",marginBottom:"4px"}}>
+                  {T.inboxFrom} <strong>{item.from_email}</strong>
+                </div>
+                {item.note && (
+                  <div style={{fontSize:"12px",color:"var(--text-sub)",background:"var(--surface)",
+                    border:"1px solid var(--border)",borderRadius:"6px",padding:"6px 10px",marginBottom:"8px",
+                    fontStyle:"italic"}}>
+                    "{item.note}"
+                  </div>
+                )}
+                <div style={{fontSize:"13px",fontWeight:600,marginBottom:"8px"}}>
+                  {T.inboxCount(item.events_data.length)}
+                  <span style={{marginLeft:"8px",fontSize:"11px",color:"var(--text-muted)"}}>
+                    {new Date(item.created_at).toLocaleDateString()}
+                  </span>
+                </div>
+                <div style={{display:"flex",flexWrap:"wrap",gap:"4px",marginBottom:"8px"}}>
+                  {item.events_data.slice(0,5).map((e,i) => (
+                    <span key={i} style={{fontSize:"10px",padding:"2px 6px",borderRadius:"4px",
+                      background: getTypeInfo(e.type).color + "22", color: getTypeInfo(e.type).color, fontWeight:600}}>
+                      {e.course || e.title}
+                    </span>
+                  ))}
+                  {item.events_data.length > 5 && (
+                    <span style={{fontSize:"10px",color:"var(--text-muted)"}}>+{item.events_data.length - 5}</span>
+                  )}
+                </div>
+                {item.status === "pending" ? (
+                  <div style={{display:"flex",gap:"8px"}}>
+                    <button onClick={() => acceptShare(item)}
+                      style={{flex:1,padding:"7px",background:"#16a34a",color:"white",border:"none",borderRadius:"6px",fontSize:"12px",fontWeight:600,cursor:"pointer"}}>
+                      {T.inboxAccept}
+                    </button>
+                    <button onClick={() => rejectShare(item)}
+                      style={{flex:1,padding:"7px",background:"none",border:"1px solid #e53e3e",color:"#e53e3e",borderRadius:"6px",fontSize:"12px",fontWeight:600,cursor:"pointer"}}>
+                      {T.inboxReject}
+                    </button>
+                  </div>
+                ) : (
+                  <div style={{fontSize:"12px",fontWeight:600,color: item.status === "accepted" ? "#16a34a" : "#94a3b8"}}>
+                    {item.status === "accepted" ? `✓ ${T.inboxAccepted}` : `✕ ${T.inboxRejected}`}
+                  </div>
+                )}
+              </div>
+            ))}
+            <button onClick={() => setShowInbox(false)}
+              style={{width:"100%",marginTop:"8px",padding:"9px",background:"none",border:"1px solid var(--border)",borderRadius:"7px",fontSize:"13px",cursor:"pointer"}}>
+              {T.cancel}
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className={`main ${panelOpen || selectedWeek ? "panel-open" : "panel-closed"}`}>
         {/* CALENDAR */}
