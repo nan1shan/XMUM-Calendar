@@ -1,116 +1,157 @@
 # 📅 XMUM Deadline Tracker
 
-本项目为针对厦门大学马来西亚分校学生实际课业场景中，课程事项繁多而缺乏合适的日历记录，以及在相册中查找校历效率低的问题而设计的截止日期追踪工具。有别于传统月份日历，以学期周次为轴线，让你在一个视图内掌握全学期的作业、测验、考试等各类事项，同时可充当以学期划分的校历。
+**[中文](#中文)　|　[English](#english)**
 
-A deadline tracker built for XMUM students. Unlike conventional monthly calendars, it organizes your semester by week number — so you can see assignments, quizzes, exams, and more across the entire semester at a glance.
-
-🔗 **直接使用 / Live site: [xmum-calendar.vercel.app](https://xmum-calendar.vercel.app)**
+🔗 **[xmum-calendar.vercel.app](https://xmum-calendar.vercel.app)**
 
 ---
 
-## 快速开始 / Getting Started
+<a name="中文"></a>
 
-无需安装，打开链接即可使用。
-No installation needed. Just open the link and you're good to go.
+## 中文
 
-1. 打开网站，点 **Register** 注册账号（填邮箱 + 至少6位密码）
-   Open the site, click **Register** to create an account (email + min. 6-char password)
+### 项目简介
 
-2. 右上角选择你的学期、日期样式等
-   Select your semester and date styles from the top-right dropdown
+针对厦大马校课业任务繁多、市面缺乏适配本校特色日历工具的现状，本项目旨在为厦马学生打造合适的学期截止日期追踪工具。该工具摒弃传统月历形式，以学期周次为核心轴线，可在单一视图内清晰呈现全学期作业、测验、考试等各类事项安排，实现日程一站式掌握
 
-3. 点击日历上任意一天，右边会弹出详情栏
-   Click any date on the calendar to open the side panel
+### 快速开始
 
-4. 点 **+ Add** 添加事项，填写类型、课程、标题、地点、时间
-   Click **+ Add** to create a deadline — fill in type, course, title, location and time
+1. 打开网站，点击 **Register** 注册账号（邮箱 + 至少 6 位密码）
+2. 右上角选择学期、语言、日期样式等偏好设置
+3. 点击日历上任意一天，右侧弹出详情面板
+4. 点击 **+ 添加** 创建事项，填写类型、课程、标题、地点和时间
+5. 点击 **✓** 标记完成，**✏️** 编辑（含修改日期），**🗑** 删除
 
-5. 点 **✓** 标记完成，点 🗑 删除。如果不小心设错了日期，也可以在编辑功能中重新更改日期。
-   Click **✓** to mark done, 🗑 to delete. If you accidentally set the wrong date, you can change it in the editing function. 
+### 功能说明
 
----
+#### 日历视图
 
-## 日历说明 / Calendar Guide
-
-| 标签 / Label | 含义 / Meaning |
+| 标签 | 含义 |
 |---|---|
-| Week 1–n | 正课周 / Normal teaching weeks |
-| REV | 复习周 / Revision week |
-| EXAM | 考试周 / Examination week |
+| Week 1–n | 正课周 |
+| REV | 复习周 |
+| EXAM | 考试周 |
 
-- 可点击右上角的“中/En”切换语言 / You can click "中/En" in the upper right corner to switch languages.
-- 彩色圆点 = 你设置的事项 / Colored dots = your deadlines
-- ⚠️ 时间设在 00:00–05:59 时会提示 **"前一天完成"**  / **Midnight warning** if due time is 00:00–05:59
-- 蓝色数字 = 距截止还有几天 / Blue number = days remaining
-- DDL在1/3天内时，日期右上角会出现橙色/蓝色三角标签 / When the deadline is within 1/3 day(s), an orange/blue triangle will appear in the upper right corner of the date.
-- 当一天有多项事件时，会提示Multi / When there are multiple events in a day, a "Multi" message will be displayed.
-- **自动填充功能**：添加新事项时，若类型与课程代码与历史记录完全一致，地点与时间将自动填充。课程名称需完全相同（如同一门课填写了"Math5"与"math5"会被识别为同一门课，但"Math V"与"Math5"则不会匹配）。
-  **Auto-fill**: When the event type and course name exactly match a previous entry, location and time will be pre-filled. Course names must be identical to match.
+- 彩色圆点代表你设置的事项；有事项的日期格背景会显示对应颜色
+- 时间设在 00:00–05:59 时触发**凌晨截止预警**，提示前一天完成
+- 距截止 1 天时，日期右上角出现**橙色三角**；3 天内出现**绿色三角**
+- 同一天有多项事项时，左上角显示 **Multi / 多项** 标记
+- 假期日期左上角显示 **Holiday / 假期** 标记
+- 今天日期以蓝色胶囊高亮显示
 
----
+#### 智能自动填充
 
-## 周事项（待定日期）/ Week-level Events
+添加新事项时，若类型与课程代码与历史记录一致，地点与时间将自动填充。课程名称大小写不敏感，但须完全匹配（如 `math5` 与 `Math5` 视为同一门课，`Math V` 与 `Math5` 则不匹配）。
 
-当只知道某一周会安排某一事项，不知道具体时间而又想提前记录时，可以点击周标签先行编辑，等确定后再转移到具体某天。
+#### 周事项（待定日期）
 
-Sometimes a deadline is announced by week but not yet scheduled to a specific day. You can log it at the week level first, then transfer it later.
+只知道某周有事项但尚未确定具体日期时，可先记录在周标签下。
 
-**如何使用 / How to use:**
-1. 点击日历左侧的周标签（如 Week 8）即可打开该周的事项面板
-   Click the week label on the left (e.g. Week 8) to open the week panel
-2. 点 **+ Add** 填写类型、课程和标题，无需填写地点与时间
-   Click **+ Add** and fill in type, course and title — no location or time needed
-3. 周标签背景出现色块标记代表该周有待定事项
-   The presence of colored blocks in the background of the week label means there are pending events for that week
-4. 事项确定日期后，点 **📅** 按钮，选择具体周几并补全地点与时间，完成转移
-   Once the date is confirmed, click **📅**, select the day of the week, fill in location and time to transfer
+1. 点击左侧周标签（如 Week 8）打开该周事项面板
+2. 点击 **+ 添加**，填写类型、课程和标题
+3. 日期确定后，点击 **📅** 选择具体日期并补全信息完成转移
 
-**注意 / Note:** 转移后事项将出现在对应日期，原周事项自动移除。
-After transfer, the event will appear on the specific date and be removed from the week panel.
+> 转移后事项出现在对应日期，原周条目自动移除。周标签背景色块代表该周存在待定事项。
 
----
+#### 分享事项
 
-## 分享事项 / Share Events
+将自己的事项分享给课程相同的同学，对方可选择接受或拒绝。
 
-你可以将自己的事项一键分享给课程完全或者部分相同的同学，对方打开网站即可看到你分享的内容。
+1. 点击顶栏 **分享** 按钮
+2. 填写对方的注册邮箱
+3. 选择分享范围：全部 / 当前学期 / 自定义日期段（支持多段）
+4. 可选：按类型/课程筛选，并附上留言
+5. 对方收件箱收到请求后自行决定是否接受
 
-You can share your events directly to a classmate's account — they'll see the events as soon as they open the app.
+> 分享内容为副本，接受后双方数据互不影响。待定周事项不会被分享。
 
-**如何使用 / How to use:**
-1. 点击顶栏的 **分享 / Share** 按钮
-   Click the **Share** button in the top bar
-2. 填写对方的注册邮箱（需已注册账号）
-   Enter the recipient's registered email (they must have an account)
-3. 选择分享范围：全部学期、当前学期、或指定日期范围
-   Choose the range: all semesters, current semester, or specific dates
-4. 可选：筛选只分享某些类型的事项（如只分享作业和测验）；留言功能
-   Optional: filter by event type (e.g. only assignments and quizzes), and message function
-5. 点击确认，对方账号中将收到接受请求
-   Click confirm — the recipient's account will receive an acceptance request.
+#### 校历查看
 
-**注意 / Note:**
-- 分享的是当前事项的副本，分享后双方数据互不影响
-  Shared events are copied — changes made by either party will not affect the other
-- 只分享具体日期的事项，待定周事项不会被分享
-  Only date-specific events are shared; week-level pending events are excluded
-- 对方邮箱必须与注册时使用的邮箱完全一致
-  The recipient's email must exactly match their registered email
+点击 Legend 栏右侧的 **📅 校历** 按钮，可在弹窗中查看对应学年的完整校历图，并支持一键下载保存。
+
+### 隐私说明
+
+账号仅用于区分不同用户数据，不收集任何个人信息。存储内容仅限你填写的截止日期信息（课程、标题、地点、时间等）。
+
+### 更新说明
+
+- 目前支持：**2026/04**、**2026/09**
+- 校历数据每年更新
+- **数据保留政策**：本站仅维护最近三年的学期数据，超出范围的历史学期将从日历中移除，请自行备份旧学期记录。
+- 如发现错误或有功能建议，欢迎提 Issue 或留言
 
 ---
 
-## 隐私说明 / Privacy
+<a name="english"></a>
 
-- 账号**仅用于区分不同用户的数据**，不会收集任何个人信息
-- Your account is used **only to keep your data separate from other users**. No personal data is collected or shared.
-- 存储内容仅包括你填写的课程、标题、地点、时间等截止日期信息
-- Only your deadline entries (course, title, location, time) are stored.
+## English
 
----
+### About
 
-## 更新说明 / Updates
+A semester deadline tracker built for XMUM students. Unlike conventional monthly calendars, it organizes your entire semester by week number — so you can see all assignments, quizzes, exams, and more in a single view.
 
-- 每年更新校历数据 / Academic calendar updated each year
-- 目前支持 / Currently supported: **2026/04**, **2026/09**
-- 如有校历错误或建议请留言 / For calendar errors or suggestions, you can just leave a comment
-- **数据保留政策**：为方便定位新学期，本站仅保留最近三年的学期数据，超出范围的历史学期将从日历中移除。如有需要请自行记录旧学期事项。
-  **Data retention**: Only the most recent 3 years of semester data will be maintained. Please keep your own records of older entries if needed.
+### Getting Started
+
+1. Open the site and click **Register** to create an account (email + min. 6-char password)
+2. Select your semester, language, and date style from the top-right controls
+3. Click any date on the calendar to open the side panel
+4. Click **+ Add** to create a deadline — fill in type, course, title, location, and time
+5. Click **✓** to mark done, **✏️** to edit (including changing the date), **🗑** to delete
+
+### Features
+
+#### Calendar View
+
+| Label | Meaning |
+|---|---|
+| Week 1–n | Normal teaching weeks |
+| REV | Revision week |
+| EXAM | Examination week |
+
+- Colored dots represent your deadlines; cells with events show a tinted background
+- Times set between 00:00–05:59 trigger a **midnight warning**, reminding you to finish the night before
+- A date with a deadline in **1 day** shows an **orange triangle** in the top-right corner; **within 3 days** shows a **green triangle**
+- Dates with multiple events show a **Multi** label in the top-left corner
+- Public holidays show a **Holiday** label in the top-left corner
+- Today's date is highlighted with a blue pill
+
+#### Smart Auto-fill
+
+When adding a new event, if the type and course code match a previous entry, location and time are pre-filled automatically. Course names are case-insensitive but must otherwise match exactly (e.g. `math5` matches `Math5`, but `Math V` does not match `Math5`).
+
+#### Week-level Events (Date TBD)
+
+When a deadline is announced by week but not yet assigned to a specific day, you can log it at the week level first.
+
+1. Click a week label on the left (e.g. Week 8) to open the week panel
+2. Click **+ Add** and fill in type, course, and title
+3. Once the date is confirmed, click **📅** to transfer it to a specific day
+
+> After transfer, the event moves to the selected date and is removed from the week panel. A colored background on a week label indicates pending week-level events.
+
+#### Share Events
+
+Share your events directly to a classmate's account. The recipient can choose to accept or reject the incoming share.
+
+1. Click the **Share** button in the top bar
+2. Enter the recipient's registered email
+3. Choose a range: all events / current semester / custom date ranges (multiple ranges supported)
+4. Optional: filter by event type / courses, and add a message
+5. The recipient reviews the request in their inbox and decides whether to accept
+
+> Shared events are copies — changes by either party do not affect the other. Week-level pending events are not included in shares.
+
+#### Academic Calendar
+
+Click the **📅 Academic Calendar** button on the right side of the Legend bar to view the full academic calendar for the selected year in a pop-up. You can also download the image directly.
+
+### Privacy
+
+Your account is used only to keep your data separate from other users. No personal information is collected. Only your deadline entries (course, title, location, time) are stored.
+
+### Updates
+
+- Currently supported semesters: **2026/04**, **2026/09**
+- Academic calendar images are updated annually
+- **Data retention policy**: Only the most recent 3 years of semester data will be maintained. Please keep your own records of older entries if needed.
+- For calendar errors or feature suggestions, feel free to open an Issue or leave a comment

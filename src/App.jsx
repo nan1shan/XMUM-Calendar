@@ -58,6 +58,8 @@ const LANG = {
     shareAddRange: "+ 添加时间段",
     shareRemoveRange: "删除",
     shareTypes: "筛选类型（不选则全部）",
+    shareCourses: "筛选课程（不选则全部）",
+    courseNameHint: (name) => `💡 已有相似课程名：${name}，建议保持一致`,
     shareConfirm: "确认分享",
     shareSuccess: "分享成功！",
     shareNotFound: "找不到该用户",
@@ -129,6 +131,8 @@ const LANG = {
     shareAddRange: "+ Add range",
     shareRemoveRange: "Remove",
     shareTypes: "Filter by type (leave empty = all)",
+    shareCourses: "Filter by course (leave empty = all)",
+    courseNameHint: (name) => `💡 Similar course exists: ${name} — keep naming consistent`,
     shareConfirm: "Share",
     shareSuccess: "Shared successfully!",
     shareNotFound: "User not found",
@@ -233,6 +237,26 @@ function getTodayUTC8() {
 
 function isMidnight(t) { return t >= "00:00" && t <= "05:59"; }
 
+function getCacheKey(userId, semId) {
+  return `xmum_events_${userId}_${semId}`;
+}
+function loadCache(userId, semId) {
+  try {
+    const raw = localStorage.getItem(getCacheKey(userId, semId));
+    return raw ? JSON.parse(raw) : null;
+  } catch { return null; }
+}
+function saveCache(userId, semId, data) {
+  try {
+    localStorage.setItem(getCacheKey(userId, semId), JSON.stringify(data));
+    localStorage.setItem(`${getCacheKey(userId, semId)}_ts`, Date.now().toString());
+  } catch {}
+}
+function getCacheTs(userId, semId) {
+  const ts = localStorage.getItem(`${getCacheKey(userId, semId)}_ts`);
+  return ts ? parseInt(ts) : 0;
+}
+
 /**
  * Calculate effective days remaining, accounting for midnight deadlines.
  * If an event has a midnight time (00:00–05:59), it effectively needs to be
@@ -272,6 +296,10 @@ export default function App() {
   const [authEmail, setAuthEmail] = useState("");
   const [authPassword, setAuthPassword] = useState("");
   const [authError, setAuthError] = useState("");
+  const [rememberMe, setRememberMe] = useState(() => localStorage.getItem("xmum_remember") === "true");
+  const [resetMode, setResetMode] = useState(false);
+  const [newPassword, setNewPassword] = useState("");
+  const [resetStatus, setResetStatus] = useState("");
 
   const [semId, setSemId]         = useState(() => localStorage.getItem("xmum_semId") || "2026-Apr");
   const [startDay, setStartDay]   = useState(() => localStorage.getItem("xmum_startDay") || "Mon");
@@ -291,14 +319,20 @@ export default function App() {
   const [shareRange, setShareRange] = useState("sem");
   const [shareDateRanges, setShareDateRanges] = useState([{ from: "", to: "" }]);
   const [shareSelectedTypes, setShareSelectedTypes] = useState([]);
+  const [shareSelectedCourses, setShareSelectedCourses] = useState([]);
   const [shareStatus, setShareStatus] = useState("");
   const [shareNote, setShareNote] = useState("");
   const [showInbox, setShowInbox] = useState(false);
+  const [showCalendar, setShowCalendar] = useState(false);
+  const [calendarYear, setCalendarYear] = useState("2026");
   const [inboxItems, setInboxItems] = useState([]);
 
   const T = LANG[lang];
 
-  useEffect(() => { localStorage.setItem("xmum_semId", semId); }, [semId]);
+  useEffect(() => {
+    localStorage.setItem("xmum_semId", semId);
+    setEvents([]);
+  }, [semId]);
   useEffect(() => { localStorage.setItem("xmum_startDay", startDay); }, [startDay]);
   useEffect(() => { localStorage.setItem("xmum_dateStyle", dateStyle); }, [dateStyle]);
   useEffect(() => { localStorage.setItem("xmum_lang", lang); }, [lang]);
@@ -307,17 +341,43 @@ export default function App() {
     supabase.auth.getSession().then(({ data }) => {
       setUser(data.session?.user ?? null);
     });
-    const { data: listener } = supabase.auth.onAuthStateChange((_e, session) => {
+    const { data: listener } = supabase.auth.onAuthStateChange((event, session) => {
       setUser(session?.user ?? null);
+      if (event === "PASSWORD_RECOVERY") {
+        setResetMode(true);
+      }
     });
     return () => listener.subscription.unsubscribe();
   }, []);
 
   useEffect(() => {
     if (!user) { setEvents([]); return; }
-    supabase.from("events").select("*").eq("user_id", user.id)
-      .then(({ data }) => setEvents(data || []));
-  }, [user]);
+    const sem_ = SEMESTERS.find(s => s.id === semId) || SEMESTERS[0];
+    const semEnd = addDays(sem_.start, sem_.totalWeeks * 7);
+
+    // 先读缓存，立即显示
+    const cached = loadCache(user.id, semId);
+    if (cached) setEvents(cached);
+
+    // 判断是否需要重新拉取（缓存超过 5 分钟才请求）
+    const cacheAge = Date.now() - getCacheTs(user.id, semId);
+    if (cached && cacheAge < 5 * 60 * 1000) return;
+
+    // 后台静默拉取最新数据
+    supabase.from("events")
+      .select("id,date,type,course,title,location,time,done")
+      .eq("user_id", user.id)
+      .or(`date.gte.${sem_.start},date.like.WEEK:${semId}:%`)
+      .lte("date", semEnd)
+      .then(({ data }) => {
+        const filtered = (data || []).filter(e =>
+          e.date.startsWith(`WEEK:${semId}:`) ||
+          (e.date >= sem_.start && e.date <= semEnd)
+        );
+        setEvents(filtered);
+        saveCache(user.id, semId, filtered);
+      });
+  }, [user, semId]);
 
   useEffect(() => {
     if (!user || events.length === 0) return;
@@ -337,7 +397,14 @@ export default function App() {
         ? supabase.auth.signUp
         : supabase.auth.signInWithPassword;
       const { error } = await fn.call(supabase.auth, { email: authEmail, password: authPassword });
-      if (error) setAuthError(error.message);
+      if (error) { setAuthError(error.message); return; }
+      if (rememberMe) {
+        localStorage.setItem("xmum_remember", "true");
+        localStorage.setItem("xmum_saved_email", authEmail);
+      } else {
+        localStorage.removeItem("xmum_remember");
+        localStorage.removeItem("xmum_saved_email");
+      }
     } catch (e) {
       setAuthError(e.message);
     }
@@ -345,20 +412,34 @@ export default function App() {
 
   async function addEvent() {
     if (!form.title.trim() || !user) return;
+    let updated;
     if (editingId) {
-      const updateData = { ...form };
-      if (form.date && form.date !== "") updateData.date = form.date;
-      await supabase.from("events").update(updateData).eq("id", editingId);
-      setEvents(prev => prev.map(e => e.id === editingId ? { ...e, ...updateData } : e));
-      setSelectedDate(updateData.date || selectedDate);
+      await supabase.from("events").update({ ...form }).eq("id", editingId);
+      updated = events.map(e => e.id === editingId ? { ...e, ...form } : e);
       setEditingId(null);
     } else {
       const newEvent = { user_id: user.id, date: selectedDate, ...form, done: false };
-      const { data } = await supabase.from("events").insert(newEvent).select().single();
-      if (data) setEvents(prev => [...prev, data]);
+      const { data } = await supabase.from("events").insert(newEvent).select("id,date,type,course,title,location,time,done").single();
+      updated = data ? [...events, data] : events;
     }
+    setEvents(updated);
+    saveCache(user.id, semId, updated);
     setForm({ type: "asm", course: "", title: "", location: "", time: "23:59", date: "" });
     setShowForm(false);
+  }
+
+  async function toggleDone(id, currentDone) {
+    await supabase.from("events").update({ done: !currentDone }).eq("id", id);
+    const updated = events.map(e => e.id === id ? { ...e, done: !currentDone } : e);
+    setEvents(updated);
+    saveCache(user.id, semId, updated);
+  }
+
+  async function deleteEvent(id) {
+    await supabase.from("events").delete().eq("id", id);
+    const updated = events.filter(e => e.id !== id);
+    setEvents(updated);
+    saveCache(user.id, semId, updated);
   }
 
   async function toggleDone(id, currentDone) {
@@ -400,6 +481,9 @@ export default function App() {
     }
     if (shareSelectedTypes.length > 0) {
       toShare = toShare.filter(e => shareSelectedTypes.includes(e.type));
+    }
+    if (shareSelectedCourses.length > 0) {
+      toShare = toShare.filter(e => shareSelectedCourses.includes(e.course?.trim().toLowerCase()));
     }
     if (toShare.length === 0) { setShareStatus("error"); return; }
     const { error } = await supabase.from("shared_events").insert({
@@ -498,6 +582,44 @@ export default function App() {
   );
 
   // ── 未登录 ──
+  if (resetMode) return (
+    <div style={{display:"flex",alignItems:"center",justifyContent:"center",height:"100vh",background:"#f5f4f0"}}>
+      <div style={{background:"white",padding:"40px",borderRadius:"12px",width:"360px",boxShadow:"0 4px 20px rgba(0,0,0,0.08)"}}>
+        <h2 style={{fontSize:"18px",marginBottom:"8px"}}>
+          {lang === "zh" ? "🔑 设置新密码" : "🔑 Set New Password"}
+        </h2>
+        <p style={{fontSize:"12px",color:"#aaa",marginBottom:"20px"}}>
+          {lang === "zh" ? "请输入你的新密码（至少 6 位）" : "Enter your new password (min. 6 chars)"}
+        </p>
+        <input type="password"
+          placeholder={lang === "zh" ? "新密码" : "New password"}
+          value={newPassword}
+          onChange={e => setNewPassword(e.target.value)}
+          style={{width:"100%",padding:"10px 12px",borderRadius:"8px",border:"1px solid #ddd",marginBottom:"14px",fontSize:"14px"}} />
+        {resetStatus && (
+          <p style={{fontSize:"12px",marginBottom:"12px",color: resetStatus.startsWith("✓") ? "#16a34a" : "#e53e3e"}}>
+            {resetStatus}
+          </p>
+        )}
+        <button onClick={async () => {
+          if (newPassword.length < 6) {
+            setResetStatus(lang === "zh" ? "密码至少 6 位" : "Min. 6 characters");
+            return;
+          }
+          const { error } = await supabase.auth.updateUser({ password: newPassword });
+          if (error) {
+            setResetStatus(lang === "zh" ? "设置失败，请重试" : "Failed, please try again");
+          } else {
+            setResetStatus(lang === "zh" ? "✓ 密码已更新，正在跳转…" : "✓ Password updated, redirecting…");
+            setTimeout(() => setResetMode(false), 1500);
+          }
+        }} style={{width:"100%",padding:"11px",background:"#2563eb",color:"white",border:"none",borderRadius:"8px",fontSize:"14px",fontWeight:"600",cursor:"pointer"}}>
+          {lang === "zh" ? "确认设置" : "Confirm"}
+        </button>
+      </div>
+    </div>
+  );
+
   if (!user) return (
     <div style={{display:"flex",alignItems:"center",justifyContent:"center",height:"100vh",background:"#f5f4f0"}}>
       <div style={{background:"white",padding:"40px",borderRadius:"12px",width:"360px",boxShadow:"0 4px 20px rgba(0,0,0,0.08)"}}>
@@ -511,17 +633,51 @@ export default function App() {
         <p style={{color:"#888",fontSize:"13px",marginBottom:"24px"}}>
           {authMode === "login" ? T.login : T.register}
         </p>
-        <input type="email" placeholder={T.email} value={authEmail}
+        <input type="email" placeholder={T.email}
+          value={authEmail || (rememberMe ? localStorage.getItem("xmum_saved_email") || "" : "")}
           onChange={e => setAuthEmail(e.target.value)}
-          style={{width:"100%",padding:"10px 12px",borderRadius:"8px",border:"1px solid #ddd",marginBottom:"10px",fontSize:"14px"}} />
+          style={{width:"100%",padding:"10px 12px",borderRadius:"8px",border:"1px solid #ddd",marginBottom:"6px",fontSize:"14px"}} />
+        <p style={{fontSize:"11px",color:"#aaa",marginBottom:"10px",lineHeight:"1.5"}}>
+          {lang === "zh"
+            ? "邮箱无需验证，建议使用学校邮箱（@xmu.edu.my）"
+            : "No email verification required. School email (@xmu.edu.my) recommended."}
+        </p>
         <input type="password" placeholder={T.password} value={authPassword}
           onChange={e => setAuthPassword(e.target.value)}
-          style={{width:"100%",padding:"10px 12px",borderRadius:"8px",border:"1px solid #ddd",marginBottom:"16px",fontSize:"14px"}} />
+          style={{width:"100%",padding:"10px 12px",borderRadius:"8px",border:"1px solid #ddd",marginBottom:"6px",fontSize:"14px"}} />
+        <p style={{fontSize:"11px",color:"#f59e0b",marginBottom:"14px",lineHeight:"1.5"}}>
+          {lang === "zh"
+            ? "⚠️ 请牢记密码，找回需通过注册邮箱"
+            : "⚠️ Remember your password — recovery is via your registered email."}
+        </p>
+        <label style={{display:"flex",alignItems:"center",gap:"8px",fontSize:"13px",color:"#555",marginBottom:"14px",cursor:"pointer",userSelect:"none"}}>
+          <input type="checkbox" checked={rememberMe}
+            onChange={e => {
+              setRememberMe(e.target.checked);
+              localStorage.setItem("xmum_remember", e.target.checked);
+              if (!e.target.checked) {
+                localStorage.removeItem("xmum_saved_email");
+              }
+            }}
+            style={{width:"15px",height:"15px",cursor:"pointer",accentColor:"#2563eb"}} />
+          {lang === "zh" ? "记住我，下次自动登录" : "Remember me — skip login next time"}
+        </label>
         {authError && <p style={{color:"#e53e3e",fontSize:"12px",marginBottom:"12px"}}>{authError}</p>}
         <button onClick={handleAuth}
           style={{width:"100%",padding:"11px",background:"#2563eb",color:"white",border:"none",borderRadius:"8px",fontSize:"14px",fontWeight:"600",cursor:"pointer",marginBottom:"12px"}}>
           {authMode === "login" ? T.signIn : T.createAccount}
         </button>
+        {authMode === "login" && (
+          <p style={{textAlign:"center",fontSize:"12px",marginBottom:"10px"}}>
+            <span onClick={async () => {
+              if (!authEmail) { setAuthError(lang === "zh" ? "请先填写邮箱" : "Please enter your email first"); return; }
+              const { error } = await supabase.auth.resetPasswordForEmail(authEmail);
+              setAuthError(error ? (lang === "zh" ? "发送失败，请检查邮箱" : "Failed, check your email") : (lang === "zh" ? "✓ 重置邮件已发送，请查收" : "✓ Reset email sent, check your inbox"));
+            }} style={{color:"#2563eb",cursor:"pointer"}}>
+              {lang === "zh" ? "忘记密码？" : "Forgot password?"}
+            </span>
+          </p>
+        )}
         <p style={{textAlign:"center",fontSize:"13px",color:"#888"}}>
           {authMode === "login" ? T.noAccount : T.hasAccount}
           <span onClick={() => { setAuthMode(m => m === "login" ? "register" : "login"); setAuthError(""); }}
@@ -571,6 +727,11 @@ export default function App() {
             style={{background:"none",border:"1px solid var(--border)",borderRadius:"6px",padding:"6px 12px",fontSize:"13px",cursor:"pointer",color:"var(--text-muted)"}}>
             {T.share}
           </button>
+          <a href="https://github.com/nan1shan/XMUM-Calendar#readme" target="_blank" rel="noreferrer"
+            style={{background:"none",border:"1px solid var(--border)",borderRadius:"6px",padding:"6px 12px",
+              fontSize:"13px",cursor:"pointer",color:"var(--text-muted)",textDecoration:"none",display:"inline-flex",alignItems:"center",gap:"4px"}}>
+            {lang === "zh" ? "📖 使用说明" : "📖 Help"}
+          </a>
           <button onClick={() => supabase.auth.signOut()}
             style={{background:"none",border:"1px solid var(--border)",borderRadius:"6px",padding:"6px 12px",fontSize:"13px",cursor:"pointer",color:"var(--text-muted)"}}>
             {T.signOut}
@@ -598,6 +759,51 @@ export default function App() {
           <span className="legend-dot" style={{ background: "#22c55e" }} />
           <span style={{ color: "#22c55e", fontWeight: 600 }}>{T.countdown3d}</span>
         </span>
+        <span className="legend-item" style={{marginLeft:"auto"}}>
+          <button onClick={() => setShowCalendar(true)}
+            style={{background:"none",border:"1px solid var(--border)",borderRadius:"6px",
+              padding:"3px 10px",fontSize:"12px",cursor:"pointer",color:"var(--text-muted)",fontWeight:600}}>
+            {lang === "zh" ? "📅 校历" : "📅 Academic Calendar"}
+          </button>
+        </span>
+
+      {showCalendar && (
+        <div className="share-overlay" onClick={e => { if (e.target === e.currentTarget) setShowCalendar(false); }}>
+          <div style={{background:"var(--surface)",borderRadius:"14px",padding:"20px",
+            width:"100%",maxWidth:"860px",boxShadow:"0 8px 32px rgba(0,0,0,0.15)",maxHeight:"90vh",display:"flex",flexDirection:"column"}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"14px",flexShrink:0}}>
+              <div style={{display:"flex",gap:"8px",alignItems:"center"}}>
+                <span style={{fontWeight:700,fontSize:"15px"}}>
+                  {lang === "zh" ? "校历" : "Academic Calendar"}
+                </span>
+                {["2026"].map(y => (
+                  <button key={y} onClick={() => setCalendarYear(y)}
+                    style={{padding:"4px 12px",borderRadius:"6px",border:"1px solid var(--border)",
+                      fontSize:"12px",cursor:"pointer",fontWeight:600,
+                      background: calendarYear === y ? "var(--accent)" : "none",
+                      color: calendarYear === y ? "white" : "var(--text-sub)"}}>
+                    {y}
+                  </button>
+                ))}
+              </div>
+              <div style={{display:"flex",gap:"8px"}}>
+                <a href={`/calendar-${calendarYear}.jpg`} download={`XMUM-calendar-${calendarYear}.jpg`}
+                  style={{padding:"6px 14px",background:"var(--accent)",color:"white",borderRadius:"7px",
+                    fontSize:"13px",fontWeight:600,textDecoration:"none"}}>
+                  {lang === "zh" ? "⬇ 下载" : "⬇ Download"}
+                </a>
+                <button onClick={() => setShowCalendar(false)}
+                  style={{padding:"6px 12px",background:"none",border:"1px solid var(--border)",
+                    borderRadius:"7px",fontSize:"13px",cursor:"pointer"}}>✕</button>
+              </div>
+            </div>
+            <div style={{overflow:"auto",flex:1,borderRadius:"8px",border:"1px solid var(--border)"}}>
+              <img src={`/calendar-${calendarYear}.jpg`} alt={`Academic Calendar ${calendarYear}`}
+                style={{width:"100%",display:"block"}} />
+            </div>
+          </div>
+        </div>
+      )}
       </div>
 
       {showShare && (
@@ -644,6 +850,34 @@ export default function App() {
                 </button>
               </div>
             )}
+            {(() => {
+              const allCourses = [...new Set(
+                events
+                  .filter(e => e.course?.trim() && !e.date.startsWith("WEEK:"))
+                  .map(e => e.course.trim())
+              )].sort();
+              return allCourses.length > 0 ? (
+                <>
+                  <div style={{fontSize:"12px",color:"var(--text-muted)",marginBottom:"6px"}}>{T.shareCourses}</div>
+                  <div style={{display:"flex",flexWrap:"wrap",gap:"5px",marginBottom:"14px"}}>
+                    {allCourses.map(c => {
+                      const key = c.toLowerCase();
+                      const selected = shareSelectedCourses.includes(key);
+                      return (
+                        <button key={c} onClick={() => setShareSelectedCourses(prev =>
+                          selected ? prev.filter(x => x !== key) : [...prev, key]
+                        )} style={{padding:"3px 10px",borderRadius:"12px",fontSize:"11px",fontWeight:600,cursor:"pointer",
+                          border:"1px solid var(--border-strong)",
+                          background: selected ? "var(--text)" : "none",
+                          color: selected ? "white" : "var(--text-sub)"}}>
+                          {c}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </>
+              ) : null;
+            })()}
             <div style={{fontSize:"12px",color:"var(--text-muted)",marginBottom:"6px"}}>{T.shareTypes}</div>
             <div style={{display:"flex",flexWrap:"wrap",gap:"5px",marginBottom:"14px"}}>
               {EVENT_TYPES.filter(t => t.id !== "exam").map(t => (
@@ -933,6 +1167,23 @@ export default function App() {
                   </select>
                   <input placeholder={T.course} value={form.course}
                     onChange={e => setForm(f => ({ ...f, course: e.target.value }))} />
+                  {(() => {
+                    const input = form.course.trim().toLowerCase();
+                    if (!input || input.length < 2) return null;
+                    const existing = [...new Set(events.map(e => e.course?.trim()).filter(Boolean))];
+                    const similar = existing.find(c =>
+                      c.toLowerCase() !== input &&
+                      (c.toLowerCase().includes(input) || input.includes(c.toLowerCase()) ||
+                      [...input].filter((ch, i) => c.toLowerCase()[i] === ch).length >= input.length * 0.8)
+                    );
+                    return similar ? (
+                      <div style={{fontSize:"11px",color:"#d97706",marginTop:"-4px",
+                        padding:"4px 8px",background:"#fef3c7",borderRadius:"5px",cursor:"pointer"}}
+                        onClick={() => setForm(f => ({ ...f, course: similar }))}>
+                        {T.courseNameHint(similar)}
+                      </div>
+                    ) : null;
+                  })()}
                   <input placeholder={T.title_} value={form.title}
                     onChange={e => setForm(f => ({ ...f, title: e.target.value }))} />
                   <button className="save-btn" onClick={async () => {
@@ -1034,6 +1285,23 @@ export default function App() {
                             return { ...f, course: newCourse, location: match ? match.location : f.location, time: match ? match.time : f.time };
                           });
                         }} />
+                      {(() => {
+                        const input = form.course.trim().toLowerCase();
+                        if (!input || input.length < 2) return null;
+                        const existing = [...new Set(events.map(e => e.course?.trim()).filter(Boolean))];
+                        const similar = existing.find(c =>
+                          c.toLowerCase() !== input &&
+                          (c.toLowerCase().includes(input) || input.includes(c.toLowerCase()) ||
+                          [...input].filter((ch, i) => c.toLowerCase()[i] === ch).length >= input.length * 0.8)
+                        );
+                        return similar ? (
+                          <div style={{fontSize:"11px",color:"#d97706",marginTop:"-4px",
+                            padding:"4px 8px",background:"#fef3c7",borderRadius:"5px",cursor:"pointer"}}
+                            onClick={() => setForm(f => ({ ...f, course: similar }))}>
+                            {T.courseNameHint(similar)}
+                          </div>
+                        ) : null;
+                      })()}
                       <input placeholder={T.title_} value={form.title}
                         onChange={e => setForm(f => ({ ...f, title: e.target.value }))} />
                       <input placeholder={T.location} value={form.location}
