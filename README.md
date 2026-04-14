@@ -77,7 +77,7 @@
 
 - 目前支持：**2026/04**、**2026/09**
 - 校历数据每年更新
-- **数据保留政策**：本站仅维护最近三年的学期数据，超出范围的历史学期将从日历中移除，请自行备份旧学期记录。
+- **更新政策**：本站使用supabase免费版以存储用户信息等，存在一定限额，而本站作者将在两年后毕业。因此计划毕业前将项目交接给新一届同学并重新搭建网站，以提供2028年后的内容，届时存储在本站的数据可能无法迁移，请见谅。
 - 如发现错误或有功能建议，欢迎提 Issue 或留言
 
 ---
@@ -153,5 +153,5 @@ Your account is used only to keep your data separate from other users. No person
 
 - Currently supported semesters: **2026/04**, **2026/09**
 - Academic calendar images are updated annually
-- **Data retention policy**: Only the most recent 3 years of semester data will be maintained. Please keep your own records of older entries if needed.
+- **Update Policy**: This site uses Supabase’s free tier with limited storage. And the author will graduate in two years, so the project will be handed over and rebuilt to continue service after 2028. Stored data may not be transferable. We apologize for any inconvenience.
 - For calendar errors or feature suggestions, feel free to open an Issue or leave a comment
