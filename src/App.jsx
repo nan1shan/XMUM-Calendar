@@ -531,6 +531,12 @@ export default function App() {
       shared_from: item.from_user_id,
     }));
 
+    // 先删掉我账号里来自该发送方的旧副本（覆盖功能）
+    await supabase.from("events")
+      .delete()
+      .eq("user_id", user.id)
+      .eq("shared_from", item.from_user_id);
+
     const { error } = await supabase.from("events").insert(copies);
     if (!error) {
       // 找出分享里有哪些自定义类型（不在系统默认类型里的）
@@ -538,14 +544,12 @@ export default function App() {
       const customTypeIds = [...new Set(item.events_data.map(e => e.type).filter(id => !systemTypeIds.includes(id)))];
 
       if (customTypeIds.length > 0) {
-        // 拉对方（发送方）的自定义类型定义
         const { data: senderTypes } = await supabase
           .from("custom_types").select("*")
           .eq("user_id", item.from_user_id)
           .in("id", customTypeIds);
 
         if (senderTypes && senderTypes.length > 0) {
-          // 拉我现有的自定义类型，避免重复，不超过5个
           const { data: myTypes } = await supabase
             .from("custom_types").select("id").eq("user_id", user.id);
           const myCount = (myTypes || []).length;
@@ -566,25 +570,6 @@ export default function App() {
 
       await supabase.from("shared_events").update({ status: "accepted" }).eq("id", item.id);
       setInboxItems(prev => prev.map(i => i.id === item.id ? { ...i, status: "accepted" } : i));
-      supabase.from("events").select("*").eq("user_id", user.id)
-        .then(({ data }) => setEvents(data || []));
-    }
-  }
-
-    // 先删掉对方账号里来自我的、这次要覆盖的旧副本
-    const sourceIds = toShare.map(e => e.id);
-    await supabase.from("events")
-      .delete()
-      .eq("user_id", profile.id)
-      .eq("shared_from", user.id)
-      .in("source_event_id", sourceIds);
-
-    // 再插入新的
-    const { error } = await supabase.from("events").insert(copies);
-    if (!error) {
-      await supabase.from("shared_events").update({ status: "accepted" }).eq("id", item.id);
-      setInboxItems(prev => prev.map(i => i.id === item.id ? { ...i, status: "accepted" } : i));
-      setEvents(prev => [...prev, ...copies.map((e, idx) => ({ ...e, id: `tmp_${idx}` }))]);
       supabase.from("events").select("*").eq("user_id", user.id)
         .then(({ data }) => setEvents(data || []));
     }
