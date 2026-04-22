@@ -75,6 +75,13 @@ const LANG = {
     inboxRejected: "已拒绝",
     sharePending: "等待对方确认",
     shareNote: "留言（可选）",
+    customTypes: "自定义类型",
+    customTypesTitle: "管理自定义类型",
+    customTypeLabel: "类型名称",
+    customTypeAdd: "添加",
+    customTypeLimit: "最多5个自定义类型",
+    customTypeDelete: "删除",
+    customTypeSaved: "已保存",
   },
   en: {
     title: "XMUM Deadline Tracker",
@@ -148,6 +155,13 @@ const LANG = {
     inboxRejected: "Rejected",
     sharePending: "Waiting for recipient",
     shareNote: "Note (optional)",
+    customTypes: "Custom Types",
+    customTypesTitle: "Manage Custom Types",
+    customTypeLabel: "Type name",
+    customTypeAdd: "Add",
+    customTypeLimit: "Max 5 custom types",
+    customTypeDelete: "Delete",
+    customTypeSaved: "Saved",
   }
 };
 
@@ -315,6 +329,10 @@ export default function App() {
   const [transferring, setTransferring] = useState(null);
   const [transferForm, setTransferForm] = useState({ dayIndex: 0, location: "", time: "23:59" });
   const [showShare, setShowShare] = useState(false);
+  const [customTypes, setCustomTypes] = useState([]);
+  const [showCustomTypes, setShowCustomTypes] = useState(false);
+  const [newTypeLabel, setNewTypeLabel] = useState("");
+  const [newTypeColor, setNewTypeColor] = useState("#8b5cf6");
   const [shareEmail, setShareEmail] = useState("");
   const [shareRange, setShareRange] = useState("sem");
   const [shareDateRanges, setShareDateRanges] = useState([{ from: "", to: "" }]);
@@ -378,6 +396,12 @@ export default function App() {
         saveCache(user.id, semId, filtered);
       });
   }, [user, semId]);
+
+  useEffect(() => {
+    if (!user) { setCustomTypes([]); return; }
+    supabase.from("custom_types").select("*").eq("user_id", user.id)
+      .then(({ data }) => setCustomTypes(data || []));
+  }, [user]);
 
   useEffect(() => {
     if (!user || events.length === 0) return;
@@ -500,9 +524,23 @@ export default function App() {
   }
 
   async function acceptShare(item) {
-    const copies = item.events_data.map(e => ({
-      user_id: user.id, done: false, ...e,
+    const copies = toShare.map(e => ({
+      user_id: profile.id,
+      date: e.date, type: e.type, course: e.course,
+      title: e.title, location: e.location, time: e.time, done: false,
+      shared_from: user.id,
+      source_event_id: e.id,
     }));
+
+    // 先删掉对方账号里来自我的、这次要覆盖的旧副本
+    const sourceIds = toShare.map(e => e.id);
+    await supabase.from("events")
+      .delete()
+      .eq("user_id", profile.id)
+      .eq("shared_from", user.id)
+      .in("source_event_id", sourceIds);
+
+    // 再插入新的
     const { error } = await supabase.from("events").insert(copies);
     if (!error) {
       await supabase.from("shared_events").update({ status: "accepted" }).eq("id", item.id);
@@ -516,6 +554,26 @@ export default function App() {
   async function rejectShare(item) {
     await supabase.from("shared_events").update({ status: "rejected" }).eq("id", item.id);
     setInboxItems(prev => prev.map(i => i.id === item.id ? { ...i, status: "rejected" } : i));
+  }
+
+  const PRESET_COLORS = [
+    "#8b5cf6","#ec4899","#14b8a6","#f59e0b",
+    "#6366f1","#84cc16","#f43f5e","#0ea5e9"
+  ];
+
+  async function addCustomType() {
+    if (!newTypeLabel.trim() || !user) return;
+    if (customTypes.length >= 5) return;
+    const { data } = await supabase.from("custom_types")
+      .insert({ user_id: user.id, label: newTypeLabel.trim(), color: newTypeColor })
+      .select().single();
+    if (data) setCustomTypes(prev => [...prev, data]);
+    setNewTypeLabel("");
+  }
+
+  async function deleteCustomType(id) {
+    await supabase.from("custom_types").delete().eq("id", id);
+    setCustomTypes(prev => prev.filter(t => t.id !== id));
   }
 
   const sem = SEMESTERS.find(s => s.id === semId) || SEMESTERS[0];
@@ -546,11 +604,13 @@ export default function App() {
   function getWeekEventKey(sid, weekLabel) { return `WEEK:${sid}:${weekLabel}`; }
   function getEventsForWeek(weekLabel) { return events.filter(e => e.date === getWeekEventKey(semId, weekLabel)); }
   function getEventsForDate(d) { return events.filter(e => e.date === d); }
-  function getTypeInfo(tid) { return EVENT_TYPES.find(t => t.id === tid) || EVENT_TYPES[EVENT_TYPES.length - 1]; }
+  function getAllTypes() { return [...EVENT_TYPES, ...customTypes.map(t => ({ id: t.id, label: t.label, color: t.color }))]; }
+  function getTypeInfo(tid) { return getAllTypes().find(t => t.id === tid) || EVENT_TYPES[EVENT_TYPES.length - 1]; }
   function getTypesForDate(date) {
     const tp = getCellType(date, sem.specialRanges);
-    if (tp === "exam") return EVENT_TYPES;
-    return EVENT_TYPES.filter(e => e.id !== "exam");
+    const all = getAllTypes();
+    if (tp === "exam") return all;
+    return all.filter(e => e.id !== "exam");
   }
 
   useEffect(() => {
@@ -723,6 +783,10 @@ export default function App() {
               <span style={{position:"absolute",top:"-4px",right:"-4px",width:"8px",height:"8px",borderRadius:"50%",background:"#ef4444"}} />
             )}
           </button>
+          <button onClick={() => setShowCustomTypes(s => !s)}
+            style={{background:"none",border:"1px solid var(--border)",borderRadius:"6px",padding:"6px 12px",fontSize:"13px",cursor:"pointer",color:"var(--text-muted)"}}>
+            {T.customTypes}
+          </button>
           <button onClick={() => { setShowShare(s => !s); setShareStatus(""); }}
             style={{background:"none",border:"1px solid var(--border)",borderRadius:"6px",padding:"6px 12px",fontSize:"13px",cursor:"pointer",color:"var(--text-muted)"}}>
             {T.share}
@@ -766,6 +830,62 @@ export default function App() {
             {lang === "zh" ? "📅 校历" : "📅 Academic Calendar"}
           </button>
         </span>
+        
+      {showCustomTypes && (
+        <div className="share-overlay" onClick={e => { if (e.target === e.currentTarget) setShowCustomTypes(false); }}>
+          <div className="share-modal">
+            <div style={{fontWeight:700,fontSize:"15px",marginBottom:"16px"}}>{T.customTypesTitle}</div>
+            <div style={{display:"flex",flexDirection:"column",gap:"8px",marginBottom:"16px"}}>
+              {customTypes.length === 0 && (
+                <div style={{fontSize:"13px",color:"var(--text-faint)",textAlign:"center",padding:"12px 0"}}>—</div>
+              )}
+              {customTypes.map(t => (
+                <div key={t.id} style={{display:"flex",alignItems:"center",gap:"8px",padding:"8px 10px",background:"var(--surface2)",borderRadius:"8px",border:"1px solid var(--border)"}}>
+                  <span style={{width:"12px",height:"12px",borderRadius:"50%",background:t.color,flexShrink:0}} />
+                  <span style={{flex:1,fontSize:"13px",fontWeight:500}}>{t.label}</span>
+                  <button onClick={() => deleteCustomType(t.id)}
+                    style={{background:"none",border:"none",cursor:"pointer",fontSize:"12px",color:"var(--text-muted)",padding:"2px 6px"}}>
+                    {T.customTypeDelete}
+                  </button>
+                </div>
+              ))}
+            </div>
+            {customTypes.length < 5 ? (
+              <>
+                <input placeholder={T.customTypeLabel} value={newTypeLabel}
+                  onChange={e => setNewTypeLabel(e.target.value)}
+                  style={{width:"100%",padding:"8px 10px",borderRadius:"7px",border:"1px solid var(--border)",marginBottom:"10px",fontSize:"13px"}} />
+                <div style={{display:"flex",gap:"8px",marginBottom:"14px",flexWrap:"wrap"}}>
+                  {PRESET_COLORS.map(c => (
+                    <div key={c} onClick={() => setNewTypeColor(c)}
+                      style={{width:"24px",height:"24px",borderRadius:"50%",background:c,cursor:"pointer",
+                        outline: newTypeColor === c ? `3px solid ${c}` : "none",
+                        outlineOffset:"2px",transition:"outline 0.1s"}} />
+                  ))}
+                </div>
+                <div style={{display:"flex",gap:"8px"}}>
+                  <button onClick={addCustomType}
+                    style={{flex:1,padding:"9px",background:"var(--accent)",color:"white",border:"none",borderRadius:"7px",fontSize:"13px",fontWeight:600,cursor:"pointer"}}>
+                    {T.customTypeAdd}
+                  </button>
+                  <button onClick={() => setShowCustomTypes(false)}
+                    style={{padding:"9px 14px",background:"none",border:"1px solid var(--border)",borderRadius:"7px",fontSize:"13px",cursor:"pointer"}}>
+                    {T.cancel}
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div style={{fontSize:"12px",color:"#ea580c",textAlign:"center",marginBottom:"12px"}}>{T.customTypeLimit}</div>
+                <button onClick={() => setShowCustomTypes(false)}
+                  style={{width:"100%",padding:"9px",background:"none",border:"1px solid var(--border)",borderRadius:"7px",fontSize:"13px",cursor:"pointer"}}>
+                  {T.cancel}
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      )}
 
       {showCalendar && (
         <div className="share-overlay" onClick={e => { if (e.target === e.currentTarget) setShowCalendar(false); }}>
