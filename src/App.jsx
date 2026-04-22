@@ -524,13 +524,52 @@ export default function App() {
   }
 
   async function acceptShare(item) {
-    const copies = toShare.map(e => ({
-      user_id: profile.id,
+    const copies = item.events_data.map(e => ({
+      user_id: user.id,
       date: e.date, type: e.type, course: e.course,
       title: e.title, location: e.location, time: e.time, done: false,
-      shared_from: user.id,
-      source_event_id: e.id,
+      shared_from: item.from_user_id,
     }));
+
+    const { error } = await supabase.from("events").insert(copies);
+    if (!error) {
+      // 找出分享里有哪些自定义类型（不在系统默认类型里的）
+      const systemTypeIds = EVENT_TYPES.map(t => t.id);
+      const customTypeIds = [...new Set(item.events_data.map(e => e.type).filter(id => !systemTypeIds.includes(id)))];
+
+      if (customTypeIds.length > 0) {
+        // 拉对方（发送方）的自定义类型定义
+        const { data: senderTypes } = await supabase
+          .from("custom_types").select("*")
+          .eq("user_id", item.from_user_id)
+          .in("id", customTypeIds);
+
+        if (senderTypes && senderTypes.length > 0) {
+          // 拉我现有的自定义类型，避免重复，不超过5个
+          const { data: myTypes } = await supabase
+            .from("custom_types").select("id").eq("user_id", user.id);
+          const myCount = (myTypes || []).length;
+          const slots = 5 - myCount;
+
+          if (slots > 0) {
+            const toAdd = senderTypes.slice(0, slots).map(t => ({
+              user_id: user.id,
+              label: t.label,
+              color: t.color,
+            }));
+            const { data: added } = await supabase
+              .from("custom_types").insert(toAdd).select();
+            if (added) setCustomTypes(prev => [...prev, ...added]);
+          }
+        }
+      }
+
+      await supabase.from("shared_events").update({ status: "accepted" }).eq("id", item.id);
+      setInboxItems(prev => prev.map(i => i.id === item.id ? { ...i, status: "accepted" } : i));
+      supabase.from("events").select("*").eq("user_id", user.id)
+        .then(({ data }) => setEvents(data || []));
+    }
+  }
 
     // 先删掉对方账号里来自我的、这次要覆盖的旧副本
     const sourceIds = toShare.map(e => e.id);
@@ -830,7 +869,7 @@ export default function App() {
             {lang === "zh" ? "📅 校历" : "📅 Academic Calendar"}
           </button>
         </span>
-        
+
       {showCustomTypes && (
         <div className="share-overlay" onClick={e => { if (e.target === e.currentTarget) setShowCustomTypes(false); }}>
           <div className="share-modal">

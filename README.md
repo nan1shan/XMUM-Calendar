@@ -64,6 +64,18 @@
 5. 对方收件箱收到请求后自行决定是否接受
 
 > 分享内容为副本，接受后双方数据互不影响。待定周事项不会被分享。
+> 若对同一人重复分享，原有重叠事项将自动被新版本覆盖，不会产生重复。
+> 若分享内容包含自定义类型，对方接受后在额度允许的情况下将自动获得该类型定义（含名称与颜色），无需手动创建。
+
+#### 自定义事项类型
+
+除系统内置类型外，你可以创建专属的事项类型，用于标记课程特有的任务形式。
+
+1. 点击顶栏 **自定义类型** 按钮
+2. 填写类型名称，选择颜色
+3. 点击 **添加** 保存，之后添加事项时即可在类型下拉菜单中选择
+
+> 每个账号最多创建 5 个自定义类型。删除某类型后，已使用该类型的事项将自动归入 Other 类别。
 
 #### 校历查看
 
@@ -140,6 +152,18 @@ Share your events directly to a classmate's account. The recipient can choose to
 5. The recipient reviews the request in their inbox and decides whether to accept
 
 > Shared events are copies — changes by either party do not affect the other. Week-level pending events are not included in shares.
+> If you share with the same person again, overlapping events are automatically overwritten — no duplicates.
+> If a share includes custom event types, the recipient will automatically receive those type definitions (name and color) upon accepting, as long as they have available slots.
+
+#### Custom Event Types
+
+In addition to the built-in types, you can create your own to match course-specific task formats.
+
+1. Click the **Custom Types** button in the top bar
+2. Enter a type name and pick a color
+3. Click **Add** — the new type will appear in the type dropdown when creating events
+
+> Each account supports up to 5 custom types. If a custom type is deleted, any events using it will fall back to the Other category.
 
 #### Academic Calendar
 
