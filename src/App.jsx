@@ -82,6 +82,8 @@ const LANG = {
     customTypeLimit: "最多5个自定义类型",
     customTypeDelete: "删除",
     customTypeSaved: "已保存",
+    moreEvents: (n) => `及其他 ${n} 项事项`,
+    eventNoCourse: "无课程",
   },
   en: {
     title: "XMUM Deadline Tracker",
@@ -162,6 +164,8 @@ const LANG = {
     customTypeLimit: "Max 5 custom types",
     customTypeDelete: "Delete",
     customTypeSaved: "Saved",
+    moreEvents: (n) => `and ${n} more event${n > 1 ? "s" : ""}`,
+    eventNoCourse: "No course",
   }
 };
 
@@ -847,13 +851,12 @@ export default function App() {
           <span className="legend-dot" style={{ background: "#22c55e" }} />
           <span style={{ color: "#22c55e", fontWeight: 600 }}>{T.countdown3d}</span>
         </span>
-        <span className="legend-item" style={{marginLeft:"auto"}}>
-          <button onClick={() => setShowCalendar(true)}
-            style={{background:"none",border:"1px solid var(--border)",borderRadius:"6px",
-              padding:"3px 10px",fontSize:"12px",cursor:"pointer",color:"var(--text-muted)",fontWeight:600}}>
+        <span className="legend-item legend-calendar-btn">
+          <button onClick={() => setShowCalendar(true)}>
             {lang === "zh" ? "📅 校历" : "📅 Academic Calendar"}
           </button>
         </span>
+      </div>
 
       {showCustomTypes && (
         <div className="share-overlay" onClick={e => { if (e.target === e.currentTarget) setShowCustomTypes(false); }}>
@@ -912,43 +915,54 @@ export default function App() {
       )}
 
       {showCalendar && (
-        <div className="share-overlay" onClick={e => { if (e.target === e.currentTarget) setShowCalendar(false); }}>
-          <div style={{background:"var(--surface)",borderRadius:"14px",padding:"20px",
-            width:"100%",maxWidth:"860px",boxShadow:"0 8px 32px rgba(0,0,0,0.15)",maxHeight:"90vh",display:"flex",flexDirection:"column"}}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"14px",flexShrink:0}}>
-              <div style={{display:"flex",gap:"8px",alignItems:"center"}}>
-                <span style={{fontWeight:700,fontSize:"15px"}}>
-                  {lang === "zh" ? "校历" : "Academic Calendar"}
-                </span>
+        <div className="calendar-overlay" onClick={e => {
+          if (e.target === e.currentTarget) setShowCalendar(false);
+        }}>
+          <div className="calendar-modal">
+            <div className="calendar-modal-header">
+              <div className="calendar-modal-title">
+                {lang === "zh" ? "校历" : "Academic Calendar"}
+              </div>
+
+              <div className="calendar-modal-actions">
                 {["2026"].map(y => (
-                  <button key={y} onClick={() => setCalendarYear(y)}
-                    style={{padding:"4px 12px",borderRadius:"6px",border:"1px solid var(--border)",
-                      fontSize:"12px",cursor:"pointer",fontWeight:600,
-                      background: calendarYear === y ? "var(--accent)" : "none",
-                      color: calendarYear === y ? "white" : "var(--text-sub)"}}>
+                  <button
+                    key={y}
+                    onClick={() => setCalendarYear(y)}
+                    className={calendarYear === y ? "calendar-year active" : "calendar-year"}
+                  >
                     {y}
                   </button>
                 ))}
-              </div>
-              <div style={{display:"flex",gap:"8px"}}>
-                <a href={`/calendar-${calendarYear}.jpg`} download={`XMUM-calendar-${calendarYear}.jpg`}
-                  style={{padding:"6px 14px",background:"var(--accent)",color:"white",borderRadius:"7px",
-                    fontSize:"13px",fontWeight:600,textDecoration:"none"}}>
-                  {lang === "zh" ? "⬇ 下载" : "⬇ Download"}
+
+                <a
+                  href={`/calendar-${calendarYear}.jpg`}
+                  download={`XMUM-calendar-${calendarYear}.jpg`}
+                  className="calendar-download"
+                >
+                  {lang === "zh" ? "下载" : "Download"}
                 </a>
-                <button onClick={() => setShowCalendar(false)}
-                  style={{padding:"6px 12px",background:"none",border:"1px solid var(--border)",
-                    borderRadius:"7px",fontSize:"13px",cursor:"pointer"}}>✕</button>
+
+                <button
+                  onClick={() => setShowCalendar(false)}
+                  className="calendar-close"
+                  aria-label="Close academic calendar"
+                >
+                  ×
+                </button>
               </div>
             </div>
-            <div style={{overflow:"auto",flex:1,borderRadius:"8px",border:"1px solid var(--border)"}}>
-              <img src={`/calendar-${calendarYear}.jpg`} alt={`Academic Calendar ${calendarYear}`}
-                style={{width:"100%",display:"block"}} />
+
+            <div className="calendar-image-wrap">
+              <img
+                src={`/calendar-${calendarYear}.jpg`}
+                alt={`Academic Calendar ${calendarYear}`}
+                className="calendar-image"
+              />
             </div>
           </div>
         </div>
       )}
-      </div>
 
       {showShare && (
         <div className="share-overlay" onClick={e => { if (e.target === e.currentTarget) setShowShare(false); }}>
@@ -1123,6 +1137,16 @@ export default function App() {
         {/* CALENDAR */}
         <div className="calendar-wrap">
           <table className="cal-table">
+            <colgroup>
+              <col className="col-week" />
+              {dayLabels.map((_, i) => (
+                <col
+                  key={i}
+                  className={weekendCols.includes(i) ? "col-weekend" : "col-weekday"}
+                />
+              ))}
+            </colgroup>
+
             <thead>
               <tr>
                 <th className="week-col" />
@@ -1167,6 +1191,8 @@ export default function App() {
                     const dayEvents = getEventsForDate(date);
                     const undoneEvents = dayEvents.filter(ev => !ev.done);
                     const hasEvents = undoneEvents.length > 0;
+                    const visibleCellEvents = undoneEvents.slice(0, 2);
+                    const hiddenCellEventCount = Math.max(undoneEvents.length - visibleCellEvents.length, 0);
                     const holiday = sem.holidays.includes(date);
                     const isSelected = selectedDate === date;
                     const isToday = date === today;
@@ -1221,12 +1247,47 @@ export default function App() {
                               }
                             </span>
                           </div>
-                          <div className="dot-row">
-                            {dayEvents.map(ev => (
-                              <span key={ev.id} className="event-dot"
-                                style={{ background: getTypeInfo(ev.type).color, opacity: ev.done ? 0.3 : 1 }} />
-                            ))}
-                          </div>
+                          {visibleCellEvents.length > 0 ? (
+                            <div className="cell-events-preview">
+                              {visibleCellEvents.map(ev => {
+                                const typeInfo = getTypeInfo(ev.type);
+                                return (
+                                  <div
+                                    key={ev.id}
+                                    className="cell-event-line"
+                                    title={`${typeInfo.label} · ${ev.course || T.eventNoCourse} · ${ev.title}`}
+                                    style={{ "--event-color": typeInfo.color }}
+                                  >
+                                    <span className="cell-event-course">
+                                      {ev.course || T.eventNoCourse}
+                                    </span>
+                                    <span className="cell-event-title">
+                                      {ev.title}
+                                    </span>
+                                  </div>
+                                );
+                              })}
+
+                              {hiddenCellEventCount > 0 && (
+                                <div className="cell-event-more">
+                                  {T.moreEvents(hiddenCellEventCount)}
+                                </div>
+                              )}
+                            </div>
+                          ) : (
+                            <div className="dot-row">
+                              {dayEvents.map(ev => (
+                                <span
+                                  key={ev.id}
+                                  className="event-dot"
+                                  style={{
+                                    background: getTypeInfo(ev.type).color,
+                                    opacity: ev.done ? 0.3 : 1,
+                                  }}
+                                />
+                              ))}
+                            </div>
+                          )}
                         </div>
                       </td>
                     );
