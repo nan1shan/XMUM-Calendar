@@ -424,15 +424,40 @@ export default function App() {
 
   async function handleAuth() {
     setAuthError("");
+
+    const domEmail = document.getElementById("auth-email-input")?.value || "";
+    const email = (authEmail || domEmail).trim();
+    const password = authPassword;
+
+    if (!email) {
+      setAuthError(lang === "zh" ? "请先填写邮箱" : "Please enter your email first");
+      return;
+    }
+
+    if (!password) {
+      setAuthError(lang === "zh" ? "请先填写密码" : "Please enter your password first");
+      return;
+    }
+
     try {
       const fn = authMode === "register"
         ? supabase.auth.signUp
         : supabase.auth.signInWithPassword;
-      const { error } = await fn.call(supabase.auth, { email: authEmail, password: authPassword });
-      if (error) { setAuthError(error.message); return; }
+
+      const { error } = await fn.call(supabase.auth, {
+        email,
+        password,
+      });
+
+      if (error) {
+        setAuthError(error.message);
+        return;
+      }
+
       if (rememberMe) {
         localStorage.setItem("xmum_remember", "true");
-        localStorage.setItem("xmum_saved_email", authEmail);
+        localStorage.setItem("xmum_saved_email", email);
+        setAuthEmail(email);
       } else {
         localStorage.removeItem("xmum_remember");
         localStorage.removeItem("xmum_saved_email");
@@ -725,10 +750,15 @@ export default function App() {
         <p style={{color:"#888",fontSize:"13px",marginBottom:"24px"}}>
           {authMode === "login" ? T.login : T.register}
         </p>
-        <input type="email" placeholder={T.email}
+        <input
+          id="auth-email-input"
+          type="email"
+          placeholder={T.email}
           value={authEmail}
           onChange={e => setAuthEmail(e.target.value)}
-          style={{width:"100%",padding:"10px 12px",borderRadius:"8px",border:"1px solid #ddd",marginBottom:"6px",fontSize:"14px"}} />
+          autoComplete="email"
+          style={{width:"100%",padding:"10px 12px",borderRadius:"8px",border:"1px solid #ddd",marginBottom:"6px",fontSize:"14px"}}
+        />
         <p style={{fontSize:"11px",color:"#aaa",marginBottom:"10px",lineHeight:"1.5"}}>
           {lang === "zh"
             ? "邮箱无需验证，建议使用学校邮箱（@xmu.edu.my）"
