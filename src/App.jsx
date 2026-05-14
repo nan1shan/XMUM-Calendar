@@ -755,8 +755,19 @@ export default function App() {
           type="email"
           placeholder={T.email}
           value={authEmail}
-          onChange={e => setAuthEmail(e.target.value)}
-          autoComplete="email"
+          onChange={e => {
+            const value = e.target.value;
+            setAuthEmail(value);
+
+            if (rememberMe) {
+              if (value.trim()) {
+                localStorage.setItem("xmum_saved_email", value.trim());
+              } else {
+                localStorage.removeItem("xmum_saved_email");
+              }
+            }
+          }}
+          autoComplete="off"
           style={{width:"100%",padding:"10px 12px",borderRadius:"8px",border:"1px solid #ddd",marginBottom:"6px",fontSize:"14px"}}
         />
         <p style={{fontSize:"11px",color:"#aaa",marginBottom:"10px",lineHeight:"1.5"}}>
@@ -781,6 +792,7 @@ export default function App() {
 
               if (!checked) {
                 localStorage.removeItem("xmum_saved_email");
+                setAuthEmail("");
               } else if (authEmail.trim()) {
                 localStorage.setItem("xmum_saved_email", authEmail.trim());
               }
