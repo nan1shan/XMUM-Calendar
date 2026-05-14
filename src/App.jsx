@@ -311,7 +311,11 @@ export default function App() {
   const today = getTodayUTC8();
   const [user, setUser] = useState(undefined);
   const [authMode, setAuthMode] = useState("login");
-  const [authEmail, setAuthEmail] = useState("");
+  const [authEmail, setAuthEmail] = useState(() => {
+    return localStorage.getItem("xmum_remember") === "true"
+      ? localStorage.getItem("xmum_saved_email") || ""
+      : "";
+  });
   const [authPassword, setAuthPassword] = useState("");
   const [authError, setAuthError] = useState("");
   const [rememberMe, setRememberMe] = useState(() => localStorage.getItem("xmum_remember") === "true");
@@ -722,7 +726,7 @@ export default function App() {
           {authMode === "login" ? T.login : T.register}
         </p>
         <input type="email" placeholder={T.email}
-          value={authEmail || (rememberMe ? localStorage.getItem("xmum_saved_email") || "" : "")}
+          value={authEmail}
           onChange={e => setAuthEmail(e.target.value)}
           style={{width:"100%",padding:"10px 12px",borderRadius:"8px",border:"1px solid #ddd",marginBottom:"6px",fontSize:"14px"}} />
         <p style={{fontSize:"11px",color:"#aaa",marginBottom:"10px",lineHeight:"1.5"}}>
@@ -741,10 +745,14 @@ export default function App() {
         <label style={{display:"flex",alignItems:"center",gap:"8px",fontSize:"13px",color:"#555",marginBottom:"14px",cursor:"pointer",userSelect:"none"}}>
           <input type="checkbox" checked={rememberMe}
             onChange={e => {
-              setRememberMe(e.target.checked);
-              localStorage.setItem("xmum_remember", e.target.checked);
-              if (!e.target.checked) {
+              const checked = e.target.checked;
+              setRememberMe(checked);
+              localStorage.setItem("xmum_remember", checked ? "true" : "false");
+
+              if (!checked) {
                 localStorage.removeItem("xmum_saved_email");
+              } else if (authEmail.trim()) {
+                localStorage.setItem("xmum_saved_email", authEmail.trim());
               }
             }}
             style={{width:"15px",height:"15px",cursor:"pointer",accentColor:"#2563eb"}} />
