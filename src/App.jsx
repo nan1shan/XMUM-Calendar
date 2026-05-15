@@ -1240,12 +1240,14 @@ export default function App() {
                     const isWknd = weekendCols.includes(di);
                     const dayEvents = getEventsForDate(date);
                     const undoneEvents = dayEvents.filter(ev => !ev.done);
+                    const doneEvents = dayEvents.filter(ev => ev.done);
                     const hasEvents = undoneEvents.length > 0;
                     const visibleCellEvents = undoneEvents.slice(0, 2);
                     const hiddenCellEventCount = Math.max(undoneEvents.length - visibleCellEvents.length, 0);
                     const holiday = sem.holidays.includes(date);
                     const isSelected = selectedDate === date;
                     const isToday = date === today;
+                    const isPast = date < today;
                     const isExam = cellType === "exam";
                     const isRevision = cellType === "revision";
                     const urgency = getCellUrgency(dayEvents, date, today);
@@ -1291,13 +1293,18 @@ export default function App() {
                               )}
                             </div>
                             <span className="date-num">
-                              {isToday
-                                ? <span className="today-pill">{formatDate(date, dateStyle)}</span>
-                                : formatDate(date, dateStyle)
-                              }
+                              {isToday ? (
+                                <span className="today-pill">
+                                  {formatDate(date, dateStyle)}
+                                </span>
+                              ) : (
+                                <span className={isPast ? "date-text date-text-past" : "date-text"}>
+                                  {formatDate(date, dateStyle)}
+                                </span>
+                              )}
                             </span>
                           </div>
-                          {visibleCellEvents.length > 0 ? (
+                          {visibleCellEvents.length > 0 && (
                             <div className="cell-events-preview">
                               {visibleCellEvents.map(ev => {
                                 const typeInfo = getTypeInfo(ev.type);
@@ -1324,18 +1331,27 @@ export default function App() {
                                 </div>
                               )}
                             </div>
-                          ) : (
-                            <div className="dot-row">
-                              {dayEvents.map(ev => (
-                                <span
-                                  key={ev.id}
-                                  className="event-dot"
-                                  style={{
-                                    background: getTypeInfo(ev.type).color,
-                                    opacity: ev.done ? 0.3 : 1,
-                                  }}
-                                />
-                              ))}
+                          )}
+
+                          {doneEvents.length > 0 && (
+                            <div
+                              className="done-dot-row"
+                              title={
+                                lang === "zh"
+                                  ? `已完成 ${doneEvents.length} 项`
+                                  : `${doneEvents.length} completed`
+                              }
+                            >
+                              <span className="done-dot-stack">
+                                {doneEvents.slice(0, 3).map(ev => (
+                                  <span
+                                    key={ev.id}
+                                    className="event-dot done-event-dot"
+                                    style={{ background: getTypeInfo(ev.type).color }}
+                                  />
+                                ))}
+                              </span>
+                              <span className="done-dot-count">×{doneEvents.length}</span>
                             </div>
                           )}
                         </div>
@@ -1466,9 +1482,22 @@ export default function App() {
                 {getEventsForWeek(selectedWeek.label).map(ev => {
                   const tp = getTypeInfo(ev.type);
                   return (
-                    <div key={ev.id} className="event-card">
-                      <div className="event-card-left" style={{ borderColor: tp.color }}>
-                        <span className="event-type-badge" style={{ background: tp.color + "22", color: tp.color }}>{tp.label}</span>
+                    <div
+                      key={ev.id}
+                      className={`event-card ${ev.done ? "done" : ""}`}
+                      style={{ "--event-color": tp.color }}
+                    >
+                      <div className="event-card-left">
+                        <div className="event-card-topline">
+                          <span className="event-type-badge" style={{ background: tp.color + "22", color: tp.color }}>
+                            {tp.label}
+                          </span>
+                          {ev.done && (
+                            <span className="event-done-badge">
+                              ✓ {lang === "zh" ? "已完成" : "Done"}
+                            </span>
+                          )}
+                        </div>
                         <div className="event-title">{ev.title}</div>
                         {ev.course && <div className="event-meta">📚 {ev.course}</div>}
                         <div style={{ fontSize:"11px", color:"#f59e0b", marginTop:"4px" }}>{T.weekPending}</div>
@@ -1584,9 +1613,22 @@ export default function App() {
                       const tp = getTypeInfo(ev.type);
                       const effectiveDiff = getEffectiveDiff(ev.date, ev.time, today);
                       return (
-                        <div key={ev.id} className={`event-card ${ev.done ? "done" : ""}`}>
-                          <div className="event-card-left" style={{ borderColor: tp.color }}>
-                            <span className="event-type-badge" style={{ background: tp.color + "22", color: tp.color }}>{tp.label}</span>
+                        <div
+                          key={ev.id}
+                          className={`event-card ${ev.done ? "done" : ""}`}
+                          style={{ "--event-color": tp.color }}
+                        >
+                          <div className="event-card-left">
+                            <div className="event-card-topline">
+                              <span className="event-type-badge" style={{ background: tp.color + "22", color: tp.color }}>
+                                {tp.label}
+                              </span>
+                              {ev.done && (
+                                <span className="event-done-badge">
+                                  ✓ {lang === "zh" ? "已完成" : "Done"}
+                                </span>
+                              )}
+                            </div>
                             <div className="event-title">{ev.title}</div>
                             {ev.course   && <div className="event-meta">📚 {ev.course}</div>}
                             {ev.location && <div className="event-meta">📍 {ev.location}</div>}
