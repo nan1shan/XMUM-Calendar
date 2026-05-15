@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import "./App.css";
 import { supabase } from "./supabase";
 
-console.log("XMUM build: subjects-split-limits-20260515-v3");
+console.log("XMUM build: supabase-labels-no-local-migration-20260515-v4");
 
 const LANG = {
   zh: {
@@ -318,7 +318,7 @@ function getLegacyCourseStorageKey(userId, semId) {
   return `xmum_courses_${userId}_${semId}`;
 }
 
-function loadSemesterSubjects(userId, semId) {
+function loadLocalSemesterSubjects(userId, semId) {
   try {
     const raw =
       localStorage.getItem(getSubjectStorageKey(userId, semId)) ||
@@ -330,10 +330,95 @@ function loadSemesterSubjects(userId, semId) {
   }
 }
 
-function saveSemesterSubjects(userId, semId, data) {
-  try {
-    localStorage.setItem(getSubjectStorageKey(userId, semId), JSON.stringify(data));
-  } catch {}
+async function fetchSemesterSubjects(userId, semId) {
+  const { data, error } = await supabase
+    .from("user_labels")
+    .select("id, kind, label, color, created_at")
+    .eq("user_id", userId)
+    .eq("semester_id", semId)
+    .order("created_at", { ascending: true });
+
+  if (error) {
+    console.error("Failed to fetch user labels:", error);
+    return [];
+  }
+
+  return sanitizeSubjects(data || []);
+}
+
+async function insertSemesterSubject(userId, semId, subject) {
+  const { data, error } = await supabase
+    .from("user_labels")
+    .insert({
+      user_id: userId,
+      semester_id: semId,
+      kind: subject.kind,
+      label: subject.label,
+      color: subject.color,
+    })
+    .select("id, kind, label, color, created_at")
+    .single();
+
+  if (error) {
+    console.error("Failed to insert user label:", error);
+    return null;
+  }
+
+  return sanitizeSubjects([data])[0] || null;
+}
+
+async function insertSemesterSubjects(userId, semId, subjects) {
+  const payload = sanitizeSubjects(subjects).map(item => ({
+    user_id: userId,
+    semester_id: semId,
+    kind: item.kind,
+    label: item.label,
+    color: item.color,
+  }));
+
+  if (payload.length === 0) return [];
+
+  const { data, error } = await supabase
+    .from("user_labels")
+    .insert(payload)
+    .select("id, kind, label, color, created_at");
+
+  if (error) {
+    console.error("Failed to insert user labels:", error);
+    return [];
+  }
+
+  return sanitizeSubjects(data || []);
+}
+
+async function deleteSemesterSubject(id) {
+  const { error } = await supabase
+    .from("user_labels")
+    .delete()
+    .eq("id", id);
+
+  if (error) {
+    console.error("Failed to delete user label:", error);
+    return false;
+  }
+
+  return true;
+}
+
+async function updateSemesterSubjectColor(id, color) {
+  const { data, error } = await supabase
+    .from("user_labels")
+    .update({ color })
+    .eq("id", id)
+    .select("id, kind, label, color, created_at")
+    .single();
+
+  if (error) {
+    console.error("Failed to update user label color:", error);
+    return null;
+  }
+
+  return sanitizeSubjects([data])[0] || null;
 }
 
 
@@ -511,11 +596,8 @@ export default function App() {
     const cached = loadCache(user.id, semId);
     if (cached) setEvents(cached);
 
-    // 判断是否需要重新拉取（缓存超过 5 分钟才请求）
-    const cacheAge = Date.now() - getCacheTs(user.id, semId);
-    if (cached && cacheAge < 5 * 60 * 1000) return;
-
-    // 后台静默拉取最新数据
+    // Always fetch Supabase after showing cache.
+    // Cache is only used for instant display, not as the source of truth.
     supabase.from("events")
       .select("id,date,type,course,title,location,time,done")
       .eq("user_id", user.id)
@@ -789,60 +871,44 @@ export default function App() {
   ];
 
   useEffect(() => {
-    if (!user) {
-      setSubjects([]);
-      return;
-    }
+    let cancelled = false;
 
-    const saved = sanitizeSubjects(loadSemesterSubjects(user.id, semId));
-
-    if (saved.length > 0) {
-      setSubjects(saved);
-      saveSemesterSubjects(user.id, semId, saved);
-      return;
-    }
-
-    const seedMap = new Map();
-
-    events.forEach(e => {
-      const label = normalizeSubjectLabel(e.course);
-      const key = getSubjectKey(label);
-
-      if (label && !seedMap.has(key)) {
-        seedMap.set(key, label);
+    async function loadSubjects() {
+      if (!user) {
+        setSubjects([]);
+        return;
       }
-    });
 
-    const seeded = Array.from(seedMap.values()).slice(0, COURSE_SUBJECT_LIMIT).map((label, index) => ({
-      id: makeSubjectId(),
-      kind: "course",
-      label,
-      color: COURSE_COLORS[index % COURSE_COLORS.length],
-    }));
+      const remoteSubjects = await fetchSemesterSubjects(user.id, semId);
 
-    const cleaned = sanitizeSubjects(seeded);
-    setSubjects(cleaned);
-    saveSemesterSubjects(user.id, semId, cleaned);
+      if (cancelled) return;
+
+      // Source of truth: Supabase only.
+      // Do not migrate from localStorage and do not seed from existing events.
+      // A new semester should start with an empty Course / Custom list.
+      setSubjects(remoteSubjects);
+    }
+
+    loadSubjects();
+
+    return () => {
+      cancelled = true;
+    };
   }, [user, semId]);
 
-  function saveSubjects(nextSubjects) {
+  function setCleanSubjects(nextSubjects) {
     const cleaned = sanitizeSubjects(nextSubjects);
     setSubjects(cleaned);
-
-    if (user) {
-      saveSemesterSubjects(user.id, semId, cleaned);
-    }
-
     return cleaned;
   }
 
-  function addSubject(kind) {
+  async function addSubject(kind) {
     const isCustom = kind === "custom";
     const label = normalizeSubjectLabel(isCustom ? newCustomLabel : newCourseLabel);
     const color = isCustom ? newCustomColor : newCourseColor;
     const limit = isCustom ? CUSTOM_SUBJECT_LIMIT : COURSE_SUBJECT_LIMIT;
 
-    if (!label) return;
+    if (!label || !user) return;
 
     const current = sanitizeSubjects(subjects);
     const key = getSubjectKey(label);
@@ -851,15 +917,15 @@ export default function App() {
 
     if (sameKindCount >= limit || exists) return;
 
-    saveSubjects([
-      ...current,
-      {
-        id: makeSubjectId(),
-        kind,
-        label,
-        color,
-      },
-    ]);
+    const inserted = await insertSemesterSubject(user.id, semId, {
+      kind,
+      label,
+      color,
+    });
+
+    if (!inserted) return;
+
+    setCleanSubjects([...current, inserted]);
 
     if (isCustom) {
       setNewCustomLabel("");
@@ -868,12 +934,20 @@ export default function App() {
     }
   }
 
-  function deleteSubject(id) {
+  async function deleteSubject(id) {
     const deleted = subjects.find(item => item.id === id);
-    const nextSubjects = saveSubjects(subjects.filter(item => item.id !== id));
+
+    if (!deleted) return;
+
+    const ok = await deleteSemesterSubject(id);
+
+    if (!ok) return;
+
+    const nextSubjects = setCleanSubjects(
+      subjects.filter(item => item.id !== id)
+    );
 
     if (
-      deleted &&
       form.course &&
       getSubjectKey(form.course) === getSubjectKey(deleted.label) &&
       !nextSubjects.some(item => getSubjectKey(item.label) === getSubjectKey(form.course))
@@ -882,10 +956,14 @@ export default function App() {
     }
   }
 
-  function updateSubjectColor(id, color) {
-    saveSubjects(
+  async function updateSubjectColor(id, color) {
+    const updated = await updateSemesterSubjectColor(id, color);
+
+    if (!updated) return;
+
+    setCleanSubjects(
       subjects.map(item =>
-        item.id === id ? { ...item, color } : item
+        item.id === id ? updated : item
       )
     );
   }
