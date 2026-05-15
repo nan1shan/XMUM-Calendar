@@ -523,24 +523,18 @@ a {
   gap: 4px;
   align-self: flex-start;
   margin-top: auto;
-  opacity: 0.78;
+  opacity: 0.75;
 }
 
 .done-dot-row {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 4px;
   width: fit-content;
   margin-top: auto;
-  padding: 2px 6px;
+  padding: 3px 6px;
   border-radius: 999px;
-  background: rgba(148, 163, 184, 0.07);
-}
-
-.done-dot-stack {
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
+  background: rgba(148, 163, 184, 0.08);
 }
 
 .event-dot {
@@ -551,8 +545,8 @@ a {
 }
 
 .done-event-dot {
-  opacity: 0.72;
-  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.75);
+  background: #64748b;
+  box-shadow: 0 0 0 2px rgba(100, 116, 139, 0.12);
 }
 
 .done-dot-count {
@@ -1266,4 +1260,311 @@ a {
   .calendar-image-wrap {
     padding: 8px;
   }
+}
+
+/* ───────────────── SUBJECT / CUSTOM ITEM MANAGER ───────────────── */
+.subject-section-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 14px;
+}
+
+.subject-section {
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: #ffffff;
+}
+
+.subject-section-course {
+  border-color: #dbeafe;
+  background: linear-gradient(135deg, #ffffff 0%, #f8fbff 100%);
+}
+
+.subject-section-custom {
+  border-color: #eadcff;
+  background: linear-gradient(135deg, #ffffff 0%, #fcf7ff 100%);
+}
+
+.subject-section-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.subject-section-title {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.subject-section-hint {
+  margin-top: 2px;
+  color: var(--text-muted);
+  font-size: 10.5px;
+  font-weight: 650;
+  line-height: 1.35;
+}
+
+.subject-limit-pill {
+  flex-shrink: 0;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: #dbeafe;
+  color: #1d4ed8;
+  font-size: 10px;
+  font-weight: 900;
+}
+
+.subject-limit-pill-custom {
+  background: #f3e8ff;
+  color: #7e22ce;
+}
+
+.subject-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.subject-empty {
+  padding: 12px 0;
+  color: var(--text-faint);
+  font-size: 13px;
+  text-align: center;
+}
+
+.subject-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 10px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface2);
+}
+
+.subject-row-course {
+  border-style: solid;
+  background: #ffffff;
+}
+
+.subject-row-custom {
+  border-style: dashed;
+  background: linear-gradient(135deg, #ffffff 0%, #faf5ff 100%);
+}
+
+.subject-color-dot,
+.subject-color-diamond {
+  width: 13px;
+  height: 13px;
+  flex-shrink: 0;
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.9), 0 0 0 3px rgba(148, 163, 184, 0.22);
+}
+
+.subject-color-dot {
+  border-radius: 999px;
+}
+
+.subject-color-diamond {
+  border-radius: 4px;
+  transform: rotate(45deg);
+}
+
+.subject-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.subject-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 750;
+}
+
+.subject-kind {
+  flex-shrink: 0;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 7px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 900;
+}
+
+.subject-kind-course {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.subject-kind-custom {
+  background: #f3e8ff;
+  color: #7e22ce;
+}
+
+.subject-color-list,
+.subject-new-color-list {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-wrap: wrap;
+}
+
+.subject-color-choice,
+.subject-new-color {
+  width: 18px;
+  height: 18px;
+  border: 2px solid #ffffff;
+  border-radius: 999px;
+  cursor: pointer;
+  box-shadow: 0 0 0 1px rgba(148, 163, 184, 0.5);
+}
+
+.subject-row-custom .subject-color-choice,
+.subject-new-color-list-custom .subject-new-color {
+  border-radius: 5px;
+}
+
+.subject-color-choice.active,
+.subject-new-color.active {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.subject-new-color-list-custom .subject-new-color.active {
+  outline-color: #7c3aed;
+}
+
+.subject-delete {
+  flex-shrink: 0;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.subject-delete:hover {
+  color: #dc2626;
+}
+
+.subject-add-grid {
+  display: grid;
+  grid-template-columns: 112px 1fr;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.subject-add-grid-single {
+  grid-template-columns: 1fr;
+}
+
+.subject-add-grid select,
+.subject-add-grid input {
+  width: 100%;
+  height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: white;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.subject-new-color-list {
+  margin-bottom: 12px;
+}
+
+.subject-add-btn {
+  width: 100%;
+  height: 34px;
+  border: none;
+  border-radius: 9px;
+  color: white;
+  font-size: 13px;
+  font-weight: 850;
+  cursor: pointer;
+}
+
+.subject-add-btn-course {
+  background: var(--accent);
+}
+
+.subject-add-btn-course:hover {
+  background: var(--accent-strong);
+}
+
+.subject-add-btn-custom {
+  background: #7c3aed;
+}
+
+.subject-add-btn-custom:hover {
+  background: #6d28d9;
+}
+
+.subject-limit-text {
+  padding: 8px 10px;
+  border-radius: 9px;
+  background: #fff7ed;
+  color: #c2410c;
+  font-size: 12px;
+  font-weight: 800;
+  text-align: center;
+}
+
+.event-card.custom-subject {
+  border-style: dashed;
+  background: linear-gradient(135deg, #ffffff 0%, #faf5ff 100%);
+}
+
+.subject-meta-marker {
+  width: 8px;
+  height: 8px;
+  display: inline-block;
+  margin-right: 5px;
+  background: var(--event-color);
+  vertical-align: middle;
+}
+
+.subject-meta-marker.course-subject {
+  border-radius: 999px;
+}
+
+.subject-meta-marker.custom-subject {
+  border-radius: 2px;
+  transform: rotate(45deg);
+}
+
+/* Final overrides for colored completed dots */
+.done-dot-row {
+  gap: 5px;
+  padding: 2px 6px;
+  background: rgba(148, 163, 184, 0.07);
+}
+
+.done-dot-stack {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.done-event-dot {
+  opacity: 0.72;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.75);
 }

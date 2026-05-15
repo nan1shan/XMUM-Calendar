@@ -2,6 +2,8 @@ import { useState, useEffect } from "react";
 import "./App.css";
 import { supabase } from "./supabase";
 
+console.log("XMUM build: subjects-split-limits-20260515-v3");
+
 const LANG = {
   zh: {
     title: "XMUM 截止日期追踪",
@@ -14,7 +16,7 @@ const LANG = {
     update: "更新",
     cancel: "取消",
     location: "地点（如 A3_620、线上）",
-    course: "课程代码（如 EEE3001）",
+    course: "课程 / 自定义项",
     title_: "标题 / 描述 *",
     noEvents: "暂无事项 — 点添加创建",
     holiday: "🎉 公共假期",
@@ -75,15 +77,25 @@ const LANG = {
     inboxRejected: "已拒绝",
     sharePending: "等待对方确认",
     shareNote: "留言（可选）",
-    customTypes: "自定义类型",
-    customTypesTitle: "管理自定义类型",
-    customTypeLabel: "类型名称",
-    customTypeAdd: "添加",
-    customTypeLimit: "最多5个自定义类型",
-    customTypeDelete: "删除",
-    customTypeSaved: "已保存",
+    subjects: "课程 / 自定义",
+    subjectsTitle: "管理本学期课程 / 自定义项",
+    subjectLabel: "名称",
+    subjectAdd: "添加",
+    subjectDelete: "删除",
+    subjectLimit: "每学期最多 8 门课程和 8 个自定义项",
+    subjectCourseLimit: "课程上限：8 门",
+    subjectCustomLimit: "自定义项上限：8 个",
+    subjectCourseTitle: "本学期课程",
+    subjectCustomTitle: "自定义项",
+    subjectCourseHint: "课程使用蓝、绿、橙等常规色系。",
+    subjectCustomHint: "自定义项使用紫、粉等独立色系，避免和课程颜色混淆。",
+    subjectSelect: "选择课程 / 自定义项 *",
+    subjectEmpty: "请先在顶部“课程 / 自定义”中添加项目",
+    subjectCourse: "课程",
+    subjectCustom: "自定义",
+    subjectColorHint: "课程和自定义项同属第一栏选择对象，但分区管理、分别计算上限，并使用不同颜色池；事项类型只作为任务性质标签。",
     moreEvents: (n) => `及其他 ${n} 项事项`,
-    eventNoCourse: "无课程",
+    eventNoCourse: "未分类",
   },
   en: {
     title: "XMUM Deadline Tracker",
@@ -96,7 +108,7 @@ const LANG = {
     update: "Update",
     cancel: "Cancel",
     location: "Location (e.g. A3_620, Online)",
-    course: "Course (e.g. EEE3001)",
+    course: "Course / Custom Item",
     title_: "Title / Description *",
     noEvents: "No events — click + Add to create one",
     holiday: "🎉 Public Holiday",
@@ -157,15 +169,25 @@ const LANG = {
     inboxRejected: "Rejected",
     sharePending: "Waiting for recipient",
     shareNote: "Note (optional)",
-    customTypes: "Custom Types",
-    customTypesTitle: "Manage Custom Types",
-    customTypeLabel: "Type name",
-    customTypeAdd: "Add",
-    customTypeLimit: "Max 5 custom types",
-    customTypeDelete: "Delete",
-    customTypeSaved: "Saved",
+    subjects: "Courses / Custom",
+    subjectsTitle: "Manage Semester Courses / Custom Items",
+    subjectLabel: "Name",
+    subjectAdd: "Add",
+    subjectDelete: "Delete",
+    subjectLimit: "Max 8 courses and 8 custom items per semester",
+    subjectCourseLimit: "Course limit: 8",
+    subjectCustomLimit: "Custom item limit: 8",
+    subjectCourseTitle: "Semester Courses",
+    subjectCustomTitle: "Custom Items",
+    subjectCourseHint: "Courses use regular blue/green/orange-style colors.",
+    subjectCustomHint: "Custom items use a separate purple/pink-style palette to avoid confusion with course colors.",
+    subjectSelect: "Select course / custom item *",
+    subjectEmpty: "Add items from Courses / Custom in the top bar first",
+    subjectCourse: "Course",
+    subjectCustom: "Custom",
+    subjectColorHint: "Courses and custom items share the first selector level, but are managed in separate sections, counted separately, and use separate color palettes; event types are task-nature labels only.",
     moreEvents: (n) => `and ${n} more event${n > 1 ? "s" : ""}`,
-    eventNoCourse: "No course",
+    eventNoCourse: "Uncategorized",
   }
 };
 
@@ -213,6 +235,107 @@ const DAYS_MON = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
 const DAYS_SUN = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
 const WEEKENDS_MON = [5, 6];
 const WEEKENDS_SUN = [0, 6];
+
+const COURSE_COLORS = [
+  "#2563eb",
+  "#16a34a",
+  "#f97316",
+  "#a855f7",
+  "#0ea5e9",
+  "#e11d48",
+  "#ca8a04",
+  "#14b8a6",
+];
+
+const CUSTOM_SUBJECT_COLORS = [
+  "#7c3aed",
+  "#db2777",
+  "#0891b2",
+  "#9333ea",
+  "#be123c",
+  "#0f766e",
+  "#6d28d9",
+  "#c026d3",
+];
+
+const COURSE_SUBJECT_LIMIT = 8;
+const CUSTOM_SUBJECT_LIMIT = 8;
+
+function getSubjectKey(label) {
+  return (label || "").trim().replace(/\s+/g, " ").toLowerCase();
+}
+
+function normalizeSubjectLabel(label) {
+  return (label || "").trim().replace(/\s+/g, " ");
+}
+
+function makeSubjectId() {
+  if (typeof crypto !== "undefined" && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+
+  return `subject-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function sanitizeSubjects(rawSubjects) {
+  const seen = new Set();
+  const ids = new Set();
+  const counts = { course: 0, custom: 0 };
+  const cleaned = [];
+
+  for (const item of rawSubjects || []) {
+    const label = normalizeSubjectLabel(item.label);
+    const kind = item.kind === "custom" ? "custom" : "course";
+    const key = getSubjectKey(label);
+    const limit = kind === "custom" ? CUSTOM_SUBJECT_LIMIT : COURSE_SUBJECT_LIMIT;
+
+    if (!label || seen.has(key) || counts[kind] >= limit) continue;
+
+    seen.add(key);
+
+    const palette = kind === "custom" ? CUSTOM_SUBJECT_COLORS : COURSE_COLORS;
+    const id = item.id && !ids.has(item.id) ? item.id : makeSubjectId();
+    ids.add(id);
+
+    cleaned.push({
+      id,
+      kind,
+      label,
+      color: item.color || palette[counts[kind] % palette.length],
+    });
+
+    counts[kind] += 1;
+  }
+
+  return cleaned;
+}
+
+function getSubjectStorageKey(userId, semId) {
+  return `xmum_subjects_${userId}_${semId}`;
+}
+
+function getLegacyCourseStorageKey(userId, semId) {
+  return `xmum_courses_${userId}_${semId}`;
+}
+
+function loadSemesterSubjects(userId, semId) {
+  try {
+    const raw =
+      localStorage.getItem(getSubjectStorageKey(userId, semId)) ||
+      localStorage.getItem(getLegacyCourseStorageKey(userId, semId));
+
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveSemesterSubjects(userId, semId, data) {
+  try {
+    localStorage.setItem(getSubjectStorageKey(userId, semId), JSON.stringify(data));
+  } catch {}
+}
+
 
 function addDays(dateStr, days) {
   const d = new Date(dateStr + "T00:00:00");
@@ -337,10 +460,13 @@ export default function App() {
   const [transferring, setTransferring] = useState(null);
   const [transferForm, setTransferForm] = useState({ dayIndex: 0, location: "", time: "23:59" });
   const [showShare, setShowShare] = useState(false);
+  const [subjects, setSubjects] = useState([]);
+  const [showSubjects, setShowSubjects] = useState(false);
+  const [newCourseLabel, setNewCourseLabel] = useState("");
+  const [newCourseColor, setNewCourseColor] = useState(COURSE_COLORS[0]);
+  const [newCustomLabel, setNewCustomLabel] = useState("");
+  const [newCustomColor, setNewCustomColor] = useState(CUSTOM_SUBJECT_COLORS[0]);
   const [customTypes, setCustomTypes] = useState([]);
-  const [showCustomTypes, setShowCustomTypes] = useState(false);
-  const [newTypeLabel, setNewTypeLabel] = useState("");
-  const [newTypeColor, setNewTypeColor] = useState("#8b5cf6");
   const [shareEmail, setShareEmail] = useState("");
   const [shareRange, setShareRange] = useState("sem");
   const [shareDateRanges, setShareDateRanges] = useState([{ from: "", to: "" }]);
@@ -411,16 +537,6 @@ export default function App() {
       .then(({ data }) => setCustomTypes(data || []));
   }, [user]);
 
-  useEffect(() => {
-    if (!user || events.length === 0) return;
-    const overdue = events.filter(e =>
-      !e.done &&
-      e.date &&
-      !e.date.startsWith("WEEK:") &&
-      e.date < today
-    );
-    overdue.forEach(e => toggleDone(e.id, false));
-  }, [events, today]);
 
   async function handleAuth() {
     setAuthError("");
@@ -467,46 +583,100 @@ export default function App() {
     }
   }
 
+  function updateEventsAndCache(nextEvents) {
+    setEvents(nextEvents);
+
+    if (user) {
+      saveCache(user.id, semId, nextEvents);
+    }
+  }
+
   async function addEvent() {
-    if (!form.title.trim() || !user) return;
+    if (!form.title.trim() || !form.course.trim() || !user) return;
+
+    const cleanForm = {
+      ...form,
+      course: form.course.trim(),
+      title: form.title.trim(),
+      location: form.location.trim(),
+    };
+
     let updated;
+
     if (editingId) {
-      await supabase.from("events").update({ ...form }).eq("id", editingId);
-      updated = events.map(e => e.id === editingId ? { ...e, ...form } : e);
+      const { error } = await supabase
+        .from("events")
+        .update(cleanForm)
+        .eq("id", editingId);
+
+      if (error) {
+        console.error(error);
+        return;
+      }
+
+      updated = events.map(e =>
+        e.id === editingId ? { ...e, ...cleanForm } : e
+      );
+
       setEditingId(null);
     } else {
-      const newEvent = { user_id: user.id, date: selectedDate, ...form, done: false };
-      const { data } = await supabase.from("events").insert(newEvent).select("id,date,type,course,title,location,time,done").single();
+      const newEvent = {
+        user_id: user.id,
+        date: selectedDate,
+        ...cleanForm,
+        done: false,
+      };
+
+      const { data, error } = await supabase
+        .from("events")
+        .insert(newEvent)
+        .select("id,date,type,course,title,location,time,done")
+        .single();
+
+      if (error) {
+        console.error(error);
+        return;
+      }
+
       updated = data ? [...events, data] : events;
     }
-    setEvents(updated);
-    saveCache(user.id, semId, updated);
+
+    updateEventsAndCache(updated);
     setForm({ type: "asm", course: "", title: "", location: "", time: "23:59", date: "" });
     setShowForm(false);
   }
 
   async function toggleDone(id, currentDone) {
-    await supabase.from("events").update({ done: !currentDone }).eq("id", id);
-    const updated = events.map(e => e.id === id ? { ...e, done: !currentDone } : e);
-    setEvents(updated);
-    saveCache(user.id, semId, updated);
+    const { error } = await supabase
+      .from("events")
+      .update({ done: !currentDone })
+      .eq("id", id);
+
+    if (error) {
+      console.error(error);
+      return;
+    }
+
+    const updated = events.map(e =>
+      e.id === id ? { ...e, done: !currentDone } : e
+    );
+
+    updateEventsAndCache(updated);
   }
 
   async function deleteEvent(id) {
-    await supabase.from("events").delete().eq("id", id);
+    const { error } = await supabase
+      .from("events")
+      .delete()
+      .eq("id", id);
+
+    if (error) {
+      console.error(error);
+      return;
+    }
+
     const updated = events.filter(e => e.id !== id);
-    setEvents(updated);
-    saveCache(user.id, semId, updated);
-  }
-
-  async function toggleDone(id, currentDone) {
-    await supabase.from("events").update({ done: !currentDone }).eq("id", id);
-    setEvents(prev => prev.map(e => e.id === id ? { ...e, done: !currentDone } : e));
-  }
-
-  async function deleteEvent(id) {
-    await supabase.from("events").delete().eq("id", id);
-    setEvents(prev => prev.filter(e => e.id !== id));
+    updateEventsAndCache(updated);
   }
 
   useEffect(() => {
@@ -618,6 +788,139 @@ export default function App() {
     "#6366f1","#84cc16","#f43f5e","#0ea5e9"
   ];
 
+  useEffect(() => {
+    if (!user) {
+      setSubjects([]);
+      return;
+    }
+
+    const saved = sanitizeSubjects(loadSemesterSubjects(user.id, semId));
+
+    if (saved.length > 0) {
+      setSubjects(saved);
+      saveSemesterSubjects(user.id, semId, saved);
+      return;
+    }
+
+    const seedMap = new Map();
+
+    events.forEach(e => {
+      const label = normalizeSubjectLabel(e.course);
+      const key = getSubjectKey(label);
+
+      if (label && !seedMap.has(key)) {
+        seedMap.set(key, label);
+      }
+    });
+
+    const seeded = Array.from(seedMap.values()).slice(0, COURSE_SUBJECT_LIMIT).map((label, index) => ({
+      id: makeSubjectId(),
+      kind: "course",
+      label,
+      color: COURSE_COLORS[index % COURSE_COLORS.length],
+    }));
+
+    const cleaned = sanitizeSubjects(seeded);
+    setSubjects(cleaned);
+    saveSemesterSubjects(user.id, semId, cleaned);
+  }, [user, semId]);
+
+  function saveSubjects(nextSubjects) {
+    const cleaned = sanitizeSubjects(nextSubjects);
+    setSubjects(cleaned);
+
+    if (user) {
+      saveSemesterSubjects(user.id, semId, cleaned);
+    }
+
+    return cleaned;
+  }
+
+  function addSubject(kind) {
+    const isCustom = kind === "custom";
+    const label = normalizeSubjectLabel(isCustom ? newCustomLabel : newCourseLabel);
+    const color = isCustom ? newCustomColor : newCourseColor;
+    const limit = isCustom ? CUSTOM_SUBJECT_LIMIT : COURSE_SUBJECT_LIMIT;
+
+    if (!label) return;
+
+    const current = sanitizeSubjects(subjects);
+    const key = getSubjectKey(label);
+    const sameKindCount = current.filter(item => item.kind === kind).length;
+    const exists = current.some(item => getSubjectKey(item.label) === key);
+
+    if (sameKindCount >= limit || exists) return;
+
+    saveSubjects([
+      ...current,
+      {
+        id: makeSubjectId(),
+        kind,
+        label,
+        color,
+      },
+    ]);
+
+    if (isCustom) {
+      setNewCustomLabel("");
+    } else {
+      setNewCourseLabel("");
+    }
+  }
+
+  function deleteSubject(id) {
+    const deleted = subjects.find(item => item.id === id);
+    const nextSubjects = saveSubjects(subjects.filter(item => item.id !== id));
+
+    if (
+      deleted &&
+      form.course &&
+      getSubjectKey(form.course) === getSubjectKey(deleted.label) &&
+      !nextSubjects.some(item => getSubjectKey(item.label) === getSubjectKey(form.course))
+    ) {
+      setForm(f => ({ ...f, course: "" }));
+    }
+  }
+
+  function updateSubjectColor(id, color) {
+    saveSubjects(
+      subjects.map(item =>
+        item.id === id ? { ...item, color } : item
+      )
+    );
+  }
+
+  function getSubjectInfo(label) {
+    const key = getSubjectKey(label);
+    return subjects.find(item => getSubjectKey(item.label) === key) || null;
+  }
+
+  function getVisualColor(ev) {
+    return getSubjectInfo(ev?.course)?.color || getTypeInfo(ev?.type).color;
+  }
+
+  function getSubjectClass(label) {
+    return getSubjectInfo(label)?.kind === "custom" ? "custom-subject" : "course-subject";
+  }
+
+  function handleSubjectSelect(value) {
+    setForm(f => {
+      const match = events.find(ev =>
+        ev.type === f.type &&
+        getSubjectKey(ev.course) === getSubjectKey(value) &&
+        ev.id !== editingId
+      );
+
+      return {
+        ...f,
+        course: value,
+        location: match ? match.location : f.location,
+        time: match ? match.time : f.time,
+      };
+    });
+  }
+
+
   async function addCustomType() {
     if (!newTypeLabel.trim() || !user) return;
     if (customTypes.length >= 5) return;
@@ -661,7 +964,7 @@ export default function App() {
   function getWeekEventKey(sid, weekLabel) { return `WEEK:${sid}:${weekLabel}`; }
   function getEventsForWeek(weekLabel) { return events.filter(e => e.date === getWeekEventKey(semId, weekLabel)); }
   function getEventsForDate(d) { return events.filter(e => e.date === d); }
-  function getAllTypes() { return [...EVENT_TYPES, ...customTypes.map(t => ({ id: t.id, label: t.label, color: t.color }))]; }
+  function getAllTypes() { return EVENT_TYPES; }
   function getTypeInfo(tid) { return getAllTypes().find(t => t.id === tid) || EVENT_TYPES[EVENT_TYPES.length - 1]; }
   function getTypesForDate(date) {
     const tp = getCellType(date, sem.specialRanges);
@@ -861,9 +1164,9 @@ export default function App() {
               <span style={{position:"absolute",top:"-4px",right:"-4px",width:"8px",height:"8px",borderRadius:"50%",background:"#ef4444"}} />
             )}
           </button>
-          <button onClick={() => setShowCustomTypes(s => !s)}
+          <button onClick={() => setShowSubjects(s => !s)}
             style={{background:"none",border:"1px solid var(--border)",borderRadius:"6px",padding:"6px 12px",fontSize:"13px",cursor:"pointer",color:"var(--text-muted)"}}>
-            {T.customTypes}
+            {T.subjects}
           </button>
           <button onClick={() => { setShowShare(s => !s); setShareStatus(""); }}
             style={{background:"none",border:"1px solid var(--border)",borderRadius:"6px",padding:"6px 12px",fontSize:"13px",cursor:"pointer",color:"var(--text-muted)"}}>
@@ -908,58 +1211,160 @@ export default function App() {
         </span>
       </div>
 
-      {showCustomTypes && (
-        <div className="share-overlay" onClick={e => { if (e.target === e.currentTarget) setShowCustomTypes(false); }}>
+      {showSubjects && (
+        <div className="share-overlay" onClick={e => { if (e.target === e.currentTarget) setShowSubjects(false); }}>
           <div className="share-modal">
-            <div style={{fontWeight:700,fontSize:"15px",marginBottom:"16px"}}>{T.customTypesTitle}</div>
-            <div style={{display:"flex",flexDirection:"column",gap:"8px",marginBottom:"16px"}}>
-              {customTypes.length === 0 && (
-                <div style={{fontSize:"13px",color:"var(--text-faint)",textAlign:"center",padding:"12px 0"}}>—</div>
-              )}
-              {customTypes.map(t => (
-                <div key={t.id} style={{display:"flex",alignItems:"center",gap:"8px",padding:"8px 10px",background:"var(--surface2)",borderRadius:"8px",border:"1px solid var(--border)"}}>
-                  <span style={{width:"12px",height:"12px",borderRadius:"50%",background:t.color,flexShrink:0}} />
-                  <span style={{flex:1,fontSize:"13px",fontWeight:500}}>{t.label}</span>
-                  <button onClick={() => deleteCustomType(t.id)}
-                    style={{background:"none",border:"none",cursor:"pointer",fontSize:"12px",color:"var(--text-muted)",padding:"2px 6px"}}>
-                    {T.customTypeDelete}
-                  </button>
-                </div>
-              ))}
+            <div style={{fontWeight:700,fontSize:"15px",marginBottom:"8px"}}>{T.subjectsTitle}</div>
+            <div style={{fontSize:"12px",color:"var(--text-muted)",lineHeight:1.5,marginBottom:"16px"}}>
+              {T.subjectColorHint}
             </div>
-            {customTypes.length < 5 ? (
-              <>
-                <input placeholder={T.customTypeLabel} value={newTypeLabel}
-                  onChange={e => setNewTypeLabel(e.target.value)}
-                  style={{width:"100%",padding:"8px 10px",borderRadius:"7px",border:"1px solid var(--border)",marginBottom:"10px",fontSize:"13px"}} />
-                <div style={{display:"flex",gap:"8px",marginBottom:"14px",flexWrap:"wrap"}}>
-                  {PRESET_COLORS.map(c => (
-                    <div key={c} onClick={() => setNewTypeColor(c)}
-                      style={{width:"24px",height:"24px",borderRadius:"50%",background:c,cursor:"pointer",
-                        outline: newTypeColor === c ? `3px solid ${c}` : "none",
-                        outlineOffset:"2px",transition:"outline 0.1s"}} />
-                  ))}
+
+            {(() => {
+              const courseSubjects = subjects.filter(item => item.kind === "course");
+              const customSubjects = subjects.filter(item => item.kind === "custom");
+
+              const renderSubjectRow = (item) => {
+                const isCustom = item.kind === "custom";
+                const palette = isCustom ? CUSTOM_SUBJECT_COLORS : COURSE_COLORS;
+
+                return (
+                  <div key={item.id} className={`subject-row ${isCustom ? "subject-row-custom" : "subject-row-course"}`}>
+                    <span className={isCustom ? "subject-color-diamond" : "subject-color-dot"} style={{ background: item.color }} />
+                    <div className="subject-main">
+                      <span className="subject-name">{item.label}</span>
+                      <span className={`subject-kind subject-kind-${item.kind}`}>
+                        {isCustom ? T.subjectCustom : T.subjectCourse}
+                      </span>
+                    </div>
+                    <div className="subject-color-list">
+                      {palette.map(c => (
+                        <button
+                          key={c}
+                          type="button"
+                          className={item.color === c ? "subject-color-choice active" : "subject-color-choice"}
+                          style={{ background: c }}
+                          onClick={() => updateSubjectColor(item.id, c)}
+                          aria-label={`Set ${item.label} color`}
+                        />
+                      ))}
+                    </div>
+                    <button
+                      className="subject-delete"
+                      onClick={() => deleteSubject(item.id)}
+                    >
+                      {T.subjectDelete}
+                    </button>
+                  </div>
+                );
+              };
+
+              return (
+                <div className="subject-section-grid">
+                  <section className="subject-section subject-section-course">
+                    <div className="subject-section-header">
+                      <div>
+                        <div className="subject-section-title">{T.subjectCourseTitle}</div>
+                        <div className="subject-section-hint">{T.subjectCourseHint}</div>
+                      </div>
+                      <span className="subject-limit-pill">{courseSubjects.length}/{COURSE_SUBJECT_LIMIT}</span>
+                    </div>
+
+                    <div className="subject-list">
+                      {courseSubjects.length === 0 && (
+                        <div className="subject-empty">—</div>
+                      )}
+                      {courseSubjects.map(renderSubjectRow)}
+                    </div>
+
+                    {courseSubjects.length < COURSE_SUBJECT_LIMIT ? (
+                      <>
+                        <div className="subject-add-grid subject-add-grid-single">
+                          <input
+                            placeholder={T.subjectLabel}
+                            value={newCourseLabel}
+                            onChange={e => setNewCourseLabel(e.target.value)}
+                          />
+                        </div>
+                        <div className="subject-new-color-list subject-new-color-list-course">
+                          {COURSE_COLORS.map(c => (
+                            <button
+                              key={c}
+                              type="button"
+                              className={newCourseColor === c ? "subject-new-color active" : "subject-new-color"}
+                              style={{ background: c }}
+                              onClick={() => setNewCourseColor(c)}
+                            />
+                          ))}
+                        </div>
+                        <button
+                          className="subject-add-btn subject-add-btn-course"
+                          onClick={() => addSubject("course")}
+                        >
+                          {T.subjectAdd}
+                        </button>
+                      </>
+                    ) : (
+                      <div className="subject-limit-text">{T.subjectCourseLimit}</div>
+                    )}
+                  </section>
+
+                  <section className="subject-section subject-section-custom">
+                    <div className="subject-section-header">
+                      <div>
+                        <div className="subject-section-title">{T.subjectCustomTitle}</div>
+                        <div className="subject-section-hint">{T.subjectCustomHint}</div>
+                      </div>
+                      <span className="subject-limit-pill subject-limit-pill-custom">{customSubjects.length}/{CUSTOM_SUBJECT_LIMIT}</span>
+                    </div>
+
+                    <div className="subject-list">
+                      {customSubjects.length === 0 && (
+                        <div className="subject-empty">—</div>
+                      )}
+                      {customSubjects.map(renderSubjectRow)}
+                    </div>
+
+                    {customSubjects.length < CUSTOM_SUBJECT_LIMIT ? (
+                      <>
+                        <div className="subject-add-grid subject-add-grid-single">
+                          <input
+                            placeholder={T.subjectLabel}
+                            value={newCustomLabel}
+                            onChange={e => setNewCustomLabel(e.target.value)}
+                          />
+                        </div>
+                        <div className="subject-new-color-list subject-new-color-list-custom">
+                          {CUSTOM_SUBJECT_COLORS.map(c => (
+                            <button
+                              key={c}
+                              type="button"
+                              className={newCustomColor === c ? "subject-new-color active" : "subject-new-color"}
+                              style={{ background: c }}
+                              onClick={() => setNewCustomColor(c)}
+                            />
+                          ))}
+                        </div>
+                        <button
+                          className="subject-add-btn subject-add-btn-custom"
+                          onClick={() => addSubject("custom")}
+                        >
+                          {T.subjectAdd}
+                        </button>
+                      </>
+                    ) : (
+                      <div className="subject-limit-text">{T.subjectCustomLimit}</div>
+                    )}
+                  </section>
                 </div>
-                <div style={{display:"flex",gap:"8px"}}>
-                  <button onClick={addCustomType}
-                    style={{flex:1,padding:"9px",background:"var(--accent)",color:"white",border:"none",borderRadius:"7px",fontSize:"13px",fontWeight:600,cursor:"pointer"}}>
-                    {T.customTypeAdd}
-                  </button>
-                  <button onClick={() => setShowCustomTypes(false)}
-                    style={{padding:"9px 14px",background:"none",border:"1px solid var(--border)",borderRadius:"7px",fontSize:"13px",cursor:"pointer"}}>
-                    {T.cancel}
-                  </button>
-                </div>
-              </>
-            ) : (
-              <>
-                <div style={{fontSize:"12px",color:"#ea580c",textAlign:"center",marginBottom:"12px"}}>{T.customTypeLimit}</div>
-                <button onClick={() => setShowCustomTypes(false)}
-                  style={{width:"100%",padding:"9px",background:"none",border:"1px solid var(--border)",borderRadius:"7px",fontSize:"13px",cursor:"pointer"}}>
-                  {T.cancel}
-                </button>
-              </>
-            )}
+              );
+            })()}
+
+            <button
+              onClick={() => setShowSubjects(false)}
+              style={{width:"100%",marginTop:"14px",padding:"9px",background:"none",border:"1px solid var(--border)",borderRadius:"7px",fontSize:"13px",cursor:"pointer"}}
+            >
+              {T.cancel}
+            </button>
           </div>
         </div>
       )}
@@ -1212,7 +1617,7 @@ export default function App() {
                 <tr key={ri}>
                   {(() => {
                     const weekEvs = getEventsForWeek(row.label).filter(e => !e.done);
-                    const weekColor = weekEvs.length > 0 ? getTypeInfo(weekEvs[0].type).color : null;
+                    const weekColor = weekEvs.length > 0 ? getVisualColor(weekEvs[0]) : null;
                     return (
                       <td
                         className={`week-label ${row.labelClass}`}
@@ -1262,7 +1667,7 @@ export default function App() {
                     // Event-tinted background (non-exam, non-selected)
                     let cellStyle = {};
                     if (!isExam && !isSelected && hasEvents) {
-                      cellStyle = { background: getTypeInfo(undoneEvents[0].type).color + "26" };
+                      cellStyle = { background: getVisualColor(undoneEvents[0]) + "26" };
                     }
 
                     // Top-left labels
@@ -1313,7 +1718,7 @@ export default function App() {
                                     key={ev.id}
                                     className="cell-event-line"
                                     title={`${typeInfo.label} · ${ev.course || T.eventNoCourse} · ${ev.title}`}
-                                    style={{ "--event-color": typeInfo.color }}
+                                    style={{ "--event-color": getVisualColor(ev) }}
                                   >
                                     <span className="cell-event-course">
                                       {ev.course || T.eventNoCourse}
@@ -1347,7 +1752,7 @@ export default function App() {
                                   <span
                                     key={ev.id}
                                     className="event-dot done-event-dot"
-                                    style={{ background: getTypeInfo(ev.type).color }}
+                                    style={{ background: getVisualColor(ev) }}
                                   />
                                 ))}
                               </span>
@@ -1431,43 +1836,41 @@ export default function App() {
 
               {showForm && (
                 <div className="add-form">
+                  <select value={form.course} onChange={e => handleSubjectSelect(e.target.value)}>
+                    <option value="">{subjects.length ? T.subjectSelect : T.subjectEmpty}</option>
+                    {subjects.filter(item => item.kind === "course").length > 0 && (
+                      <optgroup label={T.subjectCourse}>
+                        {subjects.filter(item => item.kind === "course").map(item => (
+                          <option key={item.id} value={item.label}>{item.label}</option>
+                        ))}
+                      </optgroup>
+                    )}
+                    {subjects.filter(item => item.kind === "custom").length > 0 && (
+                      <optgroup label={T.subjectCustom}>
+                        {subjects.filter(item => item.kind === "custom").map(item => (
+                          <option key={item.id} value={item.label}>{item.label}</option>
+                        ))}
+                      </optgroup>
+                    )}
+                  </select>
                   <select value={form.type} onChange={e => setForm(f => ({ ...f, type: e.target.value }))}>
                     {getTypesForDate(selectedWeek.dates[2]).map(tp => (
                       <option key={tp.id} value={tp.id}>{tp.label}</option>
                     ))}
                   </select>
-                  <input placeholder={T.course} value={form.course}
-                    onChange={e => setForm(f => ({ ...f, course: e.target.value }))} />
-                  {(() => {
-                    const input = form.course.trim().toLowerCase();
-                    if (!input || input.length < 2) return null;
-                    const existing = [...new Set(events.map(e => e.course?.trim()).filter(Boolean))];
-                    const similar = existing.find(c =>
-                      c.toLowerCase() !== input &&
-                      (c.toLowerCase().includes(input) || input.includes(c.toLowerCase()) ||
-                      [...input].filter((ch, i) => c.toLowerCase()[i] === ch).length >= input.length * 0.8)
-                    );
-                    return similar ? (
-                      <div style={{fontSize:"11px",color:"#d97706",marginTop:"-4px",
-                        padding:"4px 8px",background:"#fef3c7",borderRadius:"5px",cursor:"pointer"}}
-                        onClick={() => setForm(f => ({ ...f, course: similar }))}>
-                        {T.courseNameHint(similar)}
-                      </div>
-                    ) : null;
-                  })()}
                   <input placeholder={T.title_} value={form.title}
                     onChange={e => setForm(f => ({ ...f, title: e.target.value }))} />
                   <button className="save-btn" onClick={async () => {
-                    if (!form.title.trim() || !user) return;
+                    if (!form.title.trim() || !form.course.trim() || !user) return;
                     const weekKey = getWeekEventKey(semId, selectedWeek.label);
                     if (editingId) {
-                      await supabase.from("events").update({ type: form.type, course: form.course, title: form.title }).eq("id", editingId);
-                      setEvents(prev => prev.map(e => e.id === editingId ? { ...e, type: form.type, course: form.course, title: form.title } : e));
+                      await supabase.from("events").update({ type: form.type, course: form.course.trim(), title: form.title.trim() }).eq("id", editingId);
+                      updateEventsAndCache(events.map(e => e.id === editingId ? { ...e, type: form.type, course: form.course.trim(), title: form.title.trim() } : e));
                       setEditingId(null);
                     } else {
-                      const newEv = { user_id: user.id, date: weekKey, type: form.type, course: form.course, title: form.title, location: "", time: "", done: false };
+                      const newEv = { user_id: user.id, date: weekKey, type: form.type, course: form.course.trim(), title: form.title.trim(), location: "", time: "", done: false };
                       const { data } = await supabase.from("events").insert(newEv).select().single();
-                      if (data) setEvents(prev => [...prev, data]);
+                      if (data) updateEventsAndCache([...events, data]);
                     }
                     setForm({ type: "asm", course: "", title: "", location: "", time: "23:59" });
                     setShowForm(false);
@@ -1484,8 +1887,8 @@ export default function App() {
                   return (
                     <div
                       key={ev.id}
-                      className={`event-card ${ev.done ? "done" : ""}`}
-                      style={{ "--event-color": tp.color }}
+                      className={`event-card ${ev.done ? "done" : ""} ${getSubjectClass(ev.course)}`}
+                      style={{ "--event-color": getVisualColor(ev) }}
                     >
                       <div className="event-card-left">
                         <div className="event-card-topline">
@@ -1499,7 +1902,7 @@ export default function App() {
                           )}
                         </div>
                         <div className="event-title">{ev.title}</div>
-                        {ev.course && <div className="event-meta">📚 {ev.course}</div>}
+                        {ev.course && <div className="event-meta"><span className={`subject-meta-marker ${getSubjectClass(ev.course)}`} />{ev.course}</div>}
                         <div style={{ fontSize:"11px", color:"#f59e0b", marginTop:"4px" }}>{T.weekPending}</div>
                       </div>
                       <div className="event-actions">
@@ -1550,42 +1953,45 @@ export default function App() {
 
                   {showForm && (
                     <div className="add-form">
+                      <select value={form.course} onChange={e => handleSubjectSelect(e.target.value)}>
+                        <option value="">{subjects.length ? T.subjectSelect : T.subjectEmpty}</option>
+                        {subjects.filter(item => item.kind === "course").length > 0 && (
+                          <optgroup label={T.subjectCourse}>
+                            {subjects.filter(item => item.kind === "course").map(item => (
+                              <option key={item.id} value={item.label}>{item.label}</option>
+                            ))}
+                          </optgroup>
+                        )}
+                        {subjects.filter(item => item.kind === "custom").length > 0 && (
+                          <optgroup label={T.subjectCustom}>
+                            {subjects.filter(item => item.kind === "custom").map(item => (
+                              <option key={item.id} value={item.label}>{item.label}</option>
+                            ))}
+                          </optgroup>
+                        )}
+                      </select>
                       <select value={form.type} onChange={e => {
                         const newType = e.target.value;
                         setForm(f => {
-                          const match = events.find(ev => ev.type === newType && ev.course.trim().toLowerCase() === f.course.trim().toLowerCase() && f.course.trim() !== "" && ev.id !== editingId);
-                          return { ...f, type: newType, location: match ? match.location : f.location, time: match ? match.time : f.time };
+                          const match = events.find(ev =>
+                            ev.type === newType &&
+                            getSubjectKey(ev.course) === getSubjectKey(f.course) &&
+                            f.course.trim() !== "" &&
+                            ev.id !== editingId
+                          );
+
+                          return {
+                            ...f,
+                            type: newType,
+                            location: match ? match.location : f.location,
+                            time: match ? match.time : f.time,
+                          };
                         });
                       }}>
                         {getTypesForDate(selectedDate).map(tp => (
                           <option key={tp.id} value={tp.id}>{tp.label}</option>
                         ))}
                       </select>
-                      <input placeholder={T.course} value={form.course}
-                        onChange={e => {
-                          const newCourse = e.target.value;
-                          setForm(f => {
-                            const match = events.find(ev => ev.type === f.type && ev.course.trim().toLowerCase() === newCourse.trim().toLowerCase() && ev.id !== editingId);
-                            return { ...f, course: newCourse, location: match ? match.location : f.location, time: match ? match.time : f.time };
-                          });
-                        }} />
-                      {(() => {
-                        const input = form.course.trim().toLowerCase();
-                        if (!input || input.length < 2) return null;
-                        const existing = [...new Set(events.map(e => e.course?.trim()).filter(Boolean))];
-                        const similar = existing.find(c =>
-                          c.toLowerCase() !== input &&
-                          (c.toLowerCase().includes(input) || input.includes(c.toLowerCase()) ||
-                          [...input].filter((ch, i) => c.toLowerCase()[i] === ch).length >= input.length * 0.8)
-                        );
-                        return similar ? (
-                          <div style={{fontSize:"11px",color:"#d97706",marginTop:"-4px",
-                            padding:"4px 8px",background:"#fef3c7",borderRadius:"5px",cursor:"pointer"}}
-                            onClick={() => setForm(f => ({ ...f, course: similar }))}>
-                            {T.courseNameHint(similar)}
-                          </div>
-                        ) : null;
-                      })()}
                       <input placeholder={T.title_} value={form.title}
                         onChange={e => setForm(f => ({ ...f, title: e.target.value }))} />
                       <input placeholder={T.location} value={form.location}
@@ -1615,8 +2021,8 @@ export default function App() {
                       return (
                         <div
                           key={ev.id}
-                          className={`event-card ${ev.done ? "done" : ""}`}
-                          style={{ "--event-color": tp.color }}
+                          className={`event-card ${ev.done ? "done" : ""} ${getSubjectClass(ev.course)}`}
+                          style={{ "--event-color": getVisualColor(ev) }}
                         >
                           <div className="event-card-left">
                             <div className="event-card-topline">
@@ -1630,7 +2036,7 @@ export default function App() {
                               )}
                             </div>
                             <div className="event-title">{ev.title}</div>
-                            {ev.course   && <div className="event-meta">📚 {ev.course}</div>}
+                            {ev.course   && <div className="event-meta"><span className={`subject-meta-marker ${getSubjectClass(ev.course)}`} />{ev.course}</div>}
                             {ev.location && <div className="event-meta">📍 {ev.location}</div>}
                             <div className="event-time">
                               🕐 {ev.time}
