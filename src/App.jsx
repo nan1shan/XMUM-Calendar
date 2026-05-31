@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import "./App.css";
 import { supabase } from "./supabase";
 
-console.log("XMUM build: supabase-labels-no-local-migration-20260515-v4");
+console.log("XMUM build: planned-todo-date-fix-20260515-v7");
 
 const LANG = {
   zh: {
@@ -96,6 +96,20 @@ const LANG = {
     subjectColorHint: "课程和自定义项同属第一栏选择对象，但分区管理、分别计算上限，并使用不同颜色池；事项类型只作为任务性质标签。",
     moreEvents: (n) => `及其他 ${n} 项事项`,
     eventNoCourse: "未分类",
+    todo: "待办",
+    todoTitle: "待办清单",
+    todoHint: "可提前准备未来日期的临时任务；过去日期会自动清理，不会进入日历事项，也不会同步到云端。",
+    todoPlaceholder: "输入这一天要做的事",
+    todoAdd: "添加",
+    todoEmpty: "这一天还没有待办",
+    todoClearDone: "清空已完成",
+    todoPending: (n) => `${n} 项未完成`,
+    todoTodayCount: (n) => `今天 ${n} 项未完成`,
+    todoToday: "今天",
+    todoTomorrow: "明天",
+    todoDayAfter: "后天",
+    todoPickDate: "自选日期",
+    todoSelectedDate: "待办日期",
   },
   en: {
     title: "XMUM Deadline Tracker",
@@ -188,6 +202,20 @@ const LANG = {
     subjectColorHint: "Courses and custom items share the first selector level, but are managed in separate sections, counted separately, and use separate color palettes; event types are task-nature labels only.",
     moreEvents: (n) => `and ${n} more event${n > 1 ? "s" : ""}`,
     eventNoCourse: "Uncategorized",
+    todo: "To-do",
+    todoTitle: "To-do List",
+    todoHint: "Temporary tasks can be planned for future dates. Past dates are cleared automatically; they are not added to calendar events and are not synced to the cloud.",
+    todoPlaceholder: "What needs to be done on this date?",
+    todoAdd: "Add",
+    todoEmpty: "No to-do items for this date",
+    todoClearDone: "Clear done",
+    todoPending: (n) => `${n} pending`,
+    todoTodayCount: (n) => `Today: ${n} pending`,
+    todoToday: "Today",
+    todoTomorrow: "Tomorrow",
+    todoDayAfter: "Day after",
+    todoPickDate: "Pick date",
+    todoSelectedDate: "To-do date",
   }
 };
 
@@ -461,6 +489,18 @@ function getTodayUTC8() {
   return utc8.toISOString().split("T")[0];
 }
 
+function addTodoDays(dateStr, days) {
+  const [year, month, day] = dateStr.split("-").map(Number);
+  const date = new Date(year, month - 1, day);
+  date.setDate(date.getDate() + days);
+
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+
+  return `${y}-${m}-${d}`;
+}
+
 function isMidnight(t) { return t >= "00:00" && t <= "05:59"; }
 
 function getCacheKey(userId, semId) {
@@ -481,6 +521,38 @@ function saveCache(userId, semId, data) {
 function getCacheTs(userId, semId) {
   const ts = localStorage.getItem(`${getCacheKey(userId, semId)}_ts`);
   return ts ? parseInt(ts) : 0;
+}
+
+function getDailyTodoKey(userId, dateStr) {
+  return `xmum_daily_todos_${userId}_${dateStr}`;
+}
+
+function loadDailyTodos(userId, dateStr) {
+  try {
+    const raw = localStorage.getItem(getDailyTodoKey(userId, dateStr));
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveDailyTodos(userId, dateStr, todos) {
+  try {
+    localStorage.setItem(getDailyTodoKey(userId, dateStr), JSON.stringify(todos));
+  } catch {}
+}
+
+function cleanupOldDailyTodos(userId, todayStr) {
+  try {
+    const prefix = `xmum_daily_todos_${userId}_`;
+    Object.keys(localStorage)
+      .filter(key => {
+        if (!key.startsWith(prefix)) return false;
+        const datePart = key.slice(prefix.length);
+        return /^\d{4}-\d{2}-\d{2}$/.test(datePart) && datePart < todayStr;
+      })
+      .forEach(key => localStorage.removeItem(key));
+  } catch {}
 }
 
 /**
@@ -563,8 +635,18 @@ export default function App() {
   const [showCalendar, setShowCalendar] = useState(false);
   const [calendarYear, setCalendarYear] = useState("2026");
   const [inboxItems, setInboxItems] = useState([]);
+  const [showTodo, setShowTodo] = useState(false);
+  const [todoDate, setTodoDate] = useState(today);
+  const [dailyTodos, setDailyTodos] = useState([]);
+  const [todayTodos, setTodayTodos] = useState([]);
+  const [todoText, setTodoText] = useState("");
 
   const T = LANG[lang];
+  const todoToday = today;
+  const todoTomorrow = addTodoDays(todoToday, 1);
+  const todoDayAfter = addTodoDays(todoToday, 2);
+  const pendingTodoCount = dailyTodos.filter(item => !item.done).length;
+  const todayPendingTodoCount = todayTodos.filter(item => !item.done).length;
 
   useEffect(() => {
     localStorage.setItem("xmum_semId", semId);
@@ -618,6 +700,67 @@ export default function App() {
     supabase.from("custom_types").select("*").eq("user_id", user.id)
       .then(({ data }) => setCustomTypes(data || []));
   }, [user]);
+
+  useEffect(() => {
+    setTodoDate(current => current < todoToday ? todoToday : current);
+  }, [today]);
+
+  useEffect(() => {
+    if (!user) {
+      setDailyTodos([]);
+      setTodayTodos([]);
+      return;
+    }
+
+    cleanupOldDailyTodos(user.id, todoToday);
+    setDailyTodos(loadDailyTodos(user.id, todoDate));
+    setTodayTodos(loadDailyTodos(user.id, todoToday));
+  }, [user, today, todoDate]);
+
+  function updateDailyTodos(nextTodos) {
+    setDailyTodos(nextTodos);
+
+    if (user) {
+      saveDailyTodos(user.id, todoDate, nextTodos);
+
+      if (todoDate === todoToday) {
+        setTodayTodos(nextTodos);
+      }
+    }
+  }
+
+  function addDailyTodo() {
+    const text = todoText.trim();
+
+    if (!text || !user) return;
+
+    updateDailyTodos([
+      ...dailyTodos,
+      {
+        id: makeSubjectId(),
+        text,
+        done: false,
+        createdAt: new Date().toISOString(),
+      },
+    ]);
+    setTodoText("");
+  }
+
+  function toggleDailyTodo(id) {
+    updateDailyTodos(
+      dailyTodos.map(item =>
+        item.id === id ? { ...item, done: !item.done } : item
+      )
+    );
+  }
+
+  function deleteDailyTodo(id) {
+    updateDailyTodos(dailyTodos.filter(item => item.id !== id));
+  }
+
+  function clearDoneDailyTodos() {
+    updateDailyTodos(dailyTodos.filter(item => !item.done));
+  }
 
 
   async function handleAuth() {
@@ -1235,6 +1378,15 @@ export default function App() {
             style={{background:"none",border:"1px solid var(--border)",borderRadius:"6px",padding:"6px 12px",fontSize:"13px",cursor:"pointer",color:"var(--text-muted)",fontWeight:600}}>
             {lang === "zh" ? "EN" : "中"}
           </button>
+          <button onClick={() => setShowTodo(s => !s)}
+            style={{background:"none",border:"1px solid var(--border)",borderRadius:"6px",padding:"6px 12px",fontSize:"13px",cursor:"pointer",color:"var(--text-muted)",position:"relative"}}>
+            {T.todo}
+            {todayPendingTodoCount > 0 && (
+              <span style={{position:"absolute",top:"-6px",right:"-6px",minWidth:"16px",height:"16px",padding:"0 4px",borderRadius:"999px",background:"#2563eb",color:"white",fontSize:"10px",fontWeight:900,lineHeight:"16px"}}>
+                {todayPendingTodoCount}
+              </span>
+            )}
+          </button>
           <button onClick={() => setShowInbox(s => !s)}
             style={{background:"none",border:"1px solid var(--border)",borderRadius:"6px",padding:"6px 12px",fontSize:"13px",cursor:"pointer",color:"var(--text-muted)",position:"relative"}}>
             {T.inbox}
@@ -1288,6 +1440,97 @@ export default function App() {
           </button>
         </span>
       </div>
+
+      {showTodo && (
+        <div className="share-overlay" onClick={e => { if (e.target === e.currentTarget) setShowTodo(false); }}>
+          <div className="share-modal todo-modal">
+            <div className="todo-modal-header">
+              <div>
+                <div className="todo-title">{T.todoTitle}</div>
+                <div className="todo-subtitle">{formatDate(todoDate, dateStyle)} · {T.todoPending(pendingTodoCount)} · {T.todoTodayCount(todayPendingTodoCount)}</div>
+              </div>
+              <button className="todo-modal-close" onClick={() => setShowTodo(false)}>×</button>
+            </div>
+
+            <div className="todo-hint">{T.todoHint}</div>
+
+            <div className="todo-date-row">
+              <button
+                className={todoDate === todoToday ? "todo-date-btn active" : "todo-date-btn"}
+                onClick={() => setTodoDate(todoToday)}
+              >
+                {T.todoToday}
+              </button>
+              <button
+                className={todoDate === todoTomorrow ? "todo-date-btn active" : "todo-date-btn"}
+                onClick={() => setTodoDate(todoTomorrow)}
+              >
+                {T.todoTomorrow}
+              </button>
+              <button
+                className={todoDate === todoDayAfter ? "todo-date-btn active" : "todo-date-btn"}
+                onClick={() => setTodoDate(todoDayAfter)}
+              >
+                {T.todoDayAfter}
+              </button>
+              <label className="todo-date-picker">
+                <span>{T.todoPickDate}</span>
+                <input
+                  type="date"
+                  min={todoToday}
+                  value={todoDate}
+                  onChange={e => setTodoDate(e.target.value || todoToday)}
+                />
+              </label>
+            </div>
+
+            <div className="todo-selected-date">
+              {T.todoSelectedDate}: {formatDate(todoDate, dateStyle)}
+            </div>
+
+            <div className="todo-input-row">
+              <input
+                value={todoText}
+                placeholder={T.todoPlaceholder}
+                onChange={e => setTodoText(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    addDailyTodo();
+                  }
+                }}
+              />
+              <button onClick={addDailyTodo}>{T.todoAdd}</button>
+            </div>
+
+            <div className="todo-list">
+              {dailyTodos.length === 0 ? (
+                <div className="todo-empty">{T.todoEmpty}</div>
+              ) : (
+                dailyTodos.map(item => (
+                  <div key={item.id} className={item.done ? "todo-item todo-item-done" : "todo-item"}>
+                    <button
+                      className="todo-check"
+                      onClick={() => toggleDailyTodo(item.id)}
+                      aria-label="Toggle todo"
+                    >
+                      {item.done ? "✓" : ""}
+                    </button>
+                    <span className="todo-text">{item.text}</span>
+                    <button className="todo-delete" onClick={() => deleteDailyTodo(item.id)}>×</button>
+                  </div>
+                ))
+              )}
+            </div>
+
+            {dailyTodos.some(item => item.done) && (
+              <button className="todo-clear-done" onClick={clearDoneDailyTodos}>
+                {T.todoClearDone}
+              </button>
+            )}
+          </div>
+        </div>
+      )}
 
       {showSubjects && (
         <div className="share-overlay" onClick={e => { if (e.target === e.currentTarget) setShowSubjects(false); }}>
