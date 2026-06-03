@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import "./App.css";
 import { supabase } from "./supabase";
 
-console.log("XMUM build: planned-todo-date-fix-20260515-v7");
+console.log("XMUM build: share-subjects-20260515-v8");
 
 const LANG = {
   zh: {
@@ -913,89 +913,155 @@ export default function App() {
       .then(({ data }) => setInboxItems(data || []));
   }, [user]);
 
+  function getSharedSubjectData(ev) {
+    const subject = getSubjectInfo(ev.course);
+
+    if (!subject) {
+      return {
+        subject_kind: null,
+        subject_label: null,
+        subject_color: null,
+      };
+    }
+
+    return {
+      subject_kind: subject.kind,
+      subject_label: subject.label,
+      subject_color: subject.color,
+    };
+  }
+
+  async function importSharedSubjects(sharedEvents) {
+    if (!user) return;
+
+    const incoming = sanitizeSubjects(
+      (sharedEvents || [])
+        .filter(e => e.subject_kind && e.subject_label && e.subject_color)
+        .map(e => ({
+          kind: e.subject_kind,
+          label: e.subject_label,
+          color: e.subject_color,
+        }))
+    );
+
+    if (incoming.length === 0) return;
+
+    const remoteSubjects = await fetchSemesterSubjects(user.id, semId);
+    const existingKeys = new Set(remoteSubjects.map(item => getSubjectKey(item.label)));
+    const counts = {
+      course: remoteSubjects.filter(item => item.kind === "course").length,
+      custom: remoteSubjects.filter(item => item.kind === "custom").length,
+    };
+    const toInsert = [];
+
+    incoming.forEach(item => {
+      const key = getSubjectKey(item.label);
+      const limit = item.kind === "custom" ? CUSTOM_SUBJECT_LIMIT : COURSE_SUBJECT_LIMIT;
+
+      if (existingKeys.has(key)) return;
+      if (counts[item.kind] >= limit) return;
+
+      existingKeys.add(key);
+      counts[item.kind] += 1;
+      toInsert.push(item);
+    });
+
+    if (toInsert.length === 0) {
+      setCleanSubjects(remoteSubjects);
+      return;
+    }
+
+    const inserted = await insertSemesterSubjects(user.id, semId, toInsert);
+    setCleanSubjects([...remoteSubjects, ...inserted]);
+  }
+
   async function shareEvents() {
     setShareStatus("loading");
+
     if (shareEmail.trim().toLowerCase() === user.email.toLowerCase()) {
-      setShareStatus("self"); return;
+      setShareStatus("self");
+      return;
     }
+
     const { data: profile } = await supabase
-      .from("profiles").select("id").eq("email", shareEmail.trim()).single();
-    if (!profile) { setShareStatus("notfound"); return; }
+      .from("profiles")
+      .select("id")
+      .eq("email", shareEmail.trim())
+      .single();
+
+    if (!profile) {
+      setShareStatus("notfound");
+      return;
+    }
+
     let toShare = events.filter(e => !e.date.startsWith("WEEK:"));
+
     if (shareRange === "sem") {
       const sem_ = SEMESTERS.find(s => s.id === semId);
       toShare = toShare.filter(e => e.date >= sem_.start);
     } else if (shareRange === "week") {
       const validRanges = shareDateRanges.filter(r => r.from && r.to && r.from <= r.to);
+
       if (validRanges.length > 0) {
         toShare = toShare.filter(e => validRanges.some(r => e.date >= r.from && e.date <= r.to));
       }
     }
+
     if (shareSelectedTypes.length > 0) {
       toShare = toShare.filter(e => shareSelectedTypes.includes(e.type));
     }
+
     if (shareSelectedCourses.length > 0) {
       toShare = toShare.filter(e => shareSelectedCourses.includes(e.course?.trim().toLowerCase()));
     }
-    if (toShare.length === 0) { setShareStatus("error"); return; }
+
+    if (toShare.length === 0) {
+      setShareStatus("error");
+      return;
+    }
+
     const { error } = await supabase.from("shared_events").insert({
       from_user_id: user.id,
       to_user_id: profile.id,
       from_email: user.email,
       note: shareNote.trim(),
       events_data: toShare.map(e => ({
-        date: e.date, type: e.type, course: e.course,
-        title: e.title, location: e.location, time: e.time,
+        date: e.date,
+        type: e.type,
+        course: e.course,
+        title: e.title,
+        location: e.location,
+        time: e.time,
+        ...getSharedSubjectData(e),
       })),
     });
+
     setShareStatus(error ? "error" : "success");
   }
 
   async function acceptShare(item) {
+    await importSharedSubjects(item.events_data || []);
+
     const copies = item.events_data.map(e => ({
       user_id: user.id,
-      date: e.date, type: e.type, course: e.course,
-      title: e.title, location: e.location, time: e.time, done: false,
+      date: e.date,
+      type: e.type,
+      course: e.course,
+      title: e.title,
+      location: e.location,
+      time: e.time,
+      done: false,
       shared_from: item.from_user_id,
     }));
 
-    // 先删掉我账号里来自该发送方的旧副本（覆盖功能）
     await supabase.from("events")
       .delete()
       .eq("user_id", user.id)
       .eq("shared_from", item.from_user_id);
 
     const { error } = await supabase.from("events").insert(copies);
+
     if (!error) {
-      // 找出分享里有哪些自定义类型（不在系统默认类型里的）
-      const systemTypeIds = EVENT_TYPES.map(t => t.id);
-      const customTypeIds = [...new Set(item.events_data.map(e => e.type).filter(id => !systemTypeIds.includes(id)))];
-
-      if (customTypeIds.length > 0) {
-        const { data: senderTypes } = await supabase
-          .from("custom_types").select("*")
-          .eq("user_id", item.from_user_id)
-          .in("id", customTypeIds);
-
-        if (senderTypes && senderTypes.length > 0) {
-          const { data: myTypes } = await supabase
-            .from("custom_types").select("id").eq("user_id", user.id);
-          const myCount = (myTypes || []).length;
-          const slots = 5 - myCount;
-
-          if (slots > 0) {
-            const toAdd = senderTypes.slice(0, slots).map(t => ({
-              user_id: user.id,
-              label: t.label,
-              color: t.color,
-            }));
-            const { data: added } = await supabase
-              .from("custom_types").insert(toAdd).select();
-            if (added) setCustomTypes(prev => [...prev, ...added]);
-          }
-        }
-      }
-
       await supabase.from("shared_events").update({ status: "accepted" }).eq("id", item.id);
       setInboxItems(prev => prev.map(i => i.id === item.id ? { ...i, status: "accepted" } : i));
       supabase.from("events").select("*").eq("user_id", user.id)
