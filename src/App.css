@@ -1823,3 +1823,175 @@ a {
   font-size: 12px;
   font-weight: 800;
 }
+
+/* ───────────────── DUAL TODO MODE CONTROLS ───────────────── */
+.todo-mode-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin: 12px 0 10px;
+}
+
+.todo-mode-btn {
+  min-height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border) !important;
+  border-radius: 11px !important;
+  background: #ffffff !important;
+  color: var(--text-sub) !important;
+  font-size: 12.5px !important;
+  font-weight: 900 !important;
+  cursor: pointer;
+}
+
+.todo-mode-btn.active {
+  border-color: #bfdbfe !important;
+  background: #eff6ff !important;
+  color: var(--accent) !important;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.10);
+}
+
+.todo-item {
+  grid-template-columns: auto 1fr auto auto;
+}
+
+.todo-undo {
+  height: 24px;
+  padding: 0 8px;
+  border: 1px solid #bfdbfe !important;
+  border-radius: 8px !important;
+  background: #eff6ff !important;
+  color: var(--accent) !important;
+  font-size: 11px !important;
+  font-weight: 900 !important;
+  cursor: pointer;
+}
+
+.todo-undo:hover {
+  background: #dbeafe !important;
+}
+
+/* ───────────────── TODO MODAL COLOR REFINEMENT V2 ───────────────── */
+
+/* 顶层：近日计划 / 待办池，沿用主蓝色 */
+.todo-mode-tabs button,
+.todo-mode-tab,
+.todo-mode-btn {
+  background: #ffffff !important;
+  border: 1px solid #dbeafe !important;
+  color: #334155 !important;
+  font-weight: 850 !important;
+}
+
+.todo-mode-tabs button.active,
+.todo-mode-tab.active,
+.todo-mode-btn.active {
+  background: #2563eb !important;
+  border: 1.5px solid #1d4ed8 !important;
+  color: #ffffff !important;
+  box-shadow: 0 8px 18px rgba(37, 99, 235, 0.18) !important;
+}
+
+/* 提示框：浅灰蓝，不和按钮抢视觉 */
+.todo-hint,
+.todo-info,
+.todo-desc {
+  background: #f8fafc !important;
+  border: 1px solid #dbe4ee !important;
+  color: #475569 !important;
+}
+
+/* 近日计划提示框：保持浅蓝灰 */
+.todo-hint.planned,
+.todo-info.planned,
+.todo-desc.planned {
+  background: #f8fbff !important;
+  border-color: #cfe0f5 !important;
+  color: #475569 !important;
+}
+
+/* 待办池提示框：稍微偏灰紫，但不要太明显 */
+.todo-hint.pool,
+.todo-info.pool,
+.todo-desc.pool {
+  background: #fafaff !important;
+  border-color: #ddd6fe !important;
+  color: #4c1d95 !important;
+}
+
+/* 第二层：今天 / 明天 / 后天，默认弱化 */
+.todo-date-tabs button,
+.todo-date-tab,
+.todo-day-tab {
+  background: #ffffff !important;
+  border: 1px solid #e2e8f0 !important;
+  color: #475569 !important;
+  font-weight: 800 !important;
+}
+
+/* 第二层 active：淡蓝底 + 更粗更深蓝描边 */
+.todo-date-tabs button.active,
+.todo-date-tab.active,
+.todo-day-tab.active {
+  background: #eff6ff !important;
+  border: 2px solid #2563eb !important;
+  color: #1d4ed8 !important;
+  font-weight: 900 !important;
+  box-shadow:
+    0 0 0 3px rgba(37, 99, 235, 0.10),
+    inset 0 0 0 1px rgba(37, 99, 235, 0.12) !important;
+}
+
+/* 自选日期输入框：保持中性，不要和 active 日期抢 */
+.todo-date-input,
+.todo-custom-date input {
+  border-color: #e2e8f0 !important;
+  background: #ffffff !important;
+  color: #0f172a !important;
+}
+
+.todo-date-input:focus,
+.todo-custom-date input:focus {
+  border-color: #2563eb !important;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12) !important;
+}
+
+/* 添加按钮继续用主蓝，但阴影减弱一点 */
+.todo-add-btn,
+.todo-input-row button {
+  background: #2563eb !important;
+  color: #ffffff !important;
+  border: 1px solid #2563eb !important;
+  box-shadow: 0 8px 18px rgba(37, 99, 235, 0.14) !important;
+}
+
+.todo-add-btn:hover,
+.todo-input-row button:hover {
+  background: #1d4ed8 !important;
+  border-color: #1d4ed8 !important;
+}
+
+/* 空状态框：改淡一点 */
+.todo-empty,
+.todo-empty-box {
+  background: #ffffff !important;
+  border: 1px dashed #cbd5e1 !important;
+  color: #94a3b8 !important;
+}
+
+/* 已完成项：划掉但保留可撤销感 */
+.todo-item.done,
+.todo-pool-item.done {
+  background: #f8fafc !important;
+  border-color: #e2e8f0 !important;
+  color: #94a3b8 !important;
+}
+
+.todo-item.done .todo-text,
+.todo-pool-item.done .todo-text {
+  text-decoration: line-through;
+  text-decoration-thickness: 1px;
+  text-decoration-color: rgba(100, 116, 139, 0.55);
+}

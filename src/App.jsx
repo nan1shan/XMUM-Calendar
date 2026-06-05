@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import "./App.css";
 import { supabase } from "./supabase";
 
-console.log("XMUM build: share-subjects-20260515-v8");
+console.log("XMUM build: dual-synced-todo-20260515-v10");
 
 const LANG = {
   zh: {
@@ -98,18 +98,23 @@ const LANG = {
     eventNoCourse: "未分类",
     todo: "待办",
     todoTitle: "待办清单",
-    todoHint: "可提前准备未来日期的临时任务；过去日期会自动清理，不会进入日历事项，也不会同步到云端。",
-    todoPlaceholder: "输入这一天要做的事",
+    todoPlannedTab: "近日计划",
+    todoPoolTab: "待办池",
+    todoPlannedHint: "可以规划每日任务，按日期安排三天内的任务；到期日次日凌晨 4:00 后，不管完成与否都会自动清理。数据会随账号同步。",
+    todoPoolHint: "存放没有固定日期的任务，不会因日期变化删除；完成后会先划掉，12 小时内可撤销，超过 12 小时后自动清理。数据会随账号同步。",
+    todoPlannedPlaceholder: "输入这一天要做的事",
+    todoPoolPlaceholder: "输入要放进待办池的事",
     todoAdd: "添加",
-    todoEmpty: "这一天还没有待办",
+    todoEmptyPlanned: "这一天还没有待办",
+    todoEmptyPool: "待办池还没有事项",
     todoClearDone: "清空已完成",
+    todoUndo: "撤销",
     todoPending: (n) => `${n} 项未完成`,
-    todoTodayCount: (n) => `今天 ${n} 项未完成`,
+    todoBadgeCount: (n) => `${n} 项待处理`,
     todoToday: "今天",
     todoTomorrow: "明天",
     todoDayAfter: "后天",
-    todoPickDate: "自选日期",
-    todoSelectedDate: "待办日期",
+    todoSelectedDate: "计划日期",
   },
   en: {
     title: "XMUM Deadline Tracker",
@@ -204,18 +209,23 @@ const LANG = {
     eventNoCourse: "Uncategorized",
     todo: "To-do",
     todoTitle: "To-do List",
-    todoHint: "Temporary tasks can be planned for future dates. Past dates are cleared automatically; they are not added to calendar events and are not synced to the cloud.",
-    todoPlaceholder: "What needs to be done on this date?",
+    todoPlannedTab: "Recent Plan",
+    todoPoolTab: "Task Pool",
+    todoPlannedHint: "Plan daily tasks by date within the next three days. After 4:00 AM on the day after their date, items are automatically cleared whether completed or not. Data syncs with your account.",
+    todoPoolHint: "Store tasks without a fixed date. They are not removed by date changes; completed tasks are crossed out, can be undone within 12 hours, and are cleared automatically afterward. Data syncs with your account.",
+    todoPlannedPlaceholder: "What needs to be done on this date?",
+    todoPoolPlaceholder: "Add something to the task pool",
     todoAdd: "Add",
-    todoEmpty: "No to-do items for this date",
+    todoEmptyPlanned: "No to-do items for this date",
+    todoEmptyPool: "No items in the task pool",
     todoClearDone: "Clear done",
+    todoUndo: "Undo",
     todoPending: (n) => `${n} pending`,
-    todoTodayCount: (n) => `Today: ${n} pending`,
+    todoBadgeCount: (n) => `${n} pending`,
     todoToday: "Today",
     todoTomorrow: "Tomorrow",
     todoDayAfter: "Day after",
-    todoPickDate: "Pick date",
-    todoSelectedDate: "To-do date",
+    todoSelectedDate: "Plan date",
   }
 };
 
@@ -523,36 +533,126 @@ function getCacheTs(userId, semId) {
   return ts ? parseInt(ts) : 0;
 }
 
-function getDailyTodoKey(userId, dateStr) {
-  return `xmum_daily_todos_${userId}_${dateStr}`;
+const TODO_POOL_CLEAR_HOURS = 12;
+const PLANNED_TODO_CLEANUP_HOUR = 4;
+
+function normalizeTodos(rawTodos) {
+  return (rawTodos || [])
+    .filter(item => item && item.id && item.text)
+    .map(item => ({
+      id: item.id,
+      mode: item.mode === "pool" ? "pool" : "planned",
+      todo_date: item.todo_date || null,
+      text: item.text,
+      done: !!item.done,
+      completed_at: item.completed_at || null,
+      created_at: item.created_at || null,
+    }));
 }
 
-function loadDailyTodos(userId, dateStr) {
-  try {
-    const raw = localStorage.getItem(getDailyTodoKey(userId, dateStr));
-    return raw ? JSON.parse(raw) : [];
-  } catch {
+function getPlannedCleanupCutoffDate(todayStr) {
+  const now = new Date();
+  return now.getHours() >= PLANNED_TODO_CLEANUP_HOUR
+    ? todayStr
+    : addTodoDays(todayStr, -1);
+}
+
+async function fetchPlannedTodos(userId, dateStr) {
+  const { data, error } = await supabase
+    .from("todos")
+    .select("id,mode,todo_date,text,done,completed_at,created_at")
+    .eq("user_id", userId)
+    .eq("mode", "planned")
+    .eq("todo_date", dateStr)
+    .order("created_at", { ascending: true });
+
+  if (error) {
+    console.error("Failed to fetch planned todos:", error);
     return [];
   }
+
+  return normalizeTodos(data || []);
 }
 
-function saveDailyTodos(userId, dateStr, todos) {
-  try {
-    localStorage.setItem(getDailyTodoKey(userId, dateStr), JSON.stringify(todos));
-  } catch {}
+async function fetchPoolTodos(userId) {
+  const { data, error } = await supabase
+    .from("todos")
+    .select("id,mode,todo_date,text,done,completed_at,created_at")
+    .eq("user_id", userId)
+    .eq("mode", "pool")
+    .order("done", { ascending: true })
+    .order("created_at", { ascending: true });
+
+  if (error) {
+    console.error("Failed to fetch pool todos:", error);
+    return [];
+  }
+
+  return normalizeTodos(data || []);
 }
 
-function cleanupOldDailyTodos(userId, todayStr) {
-  try {
-    const prefix = `xmum_daily_todos_${userId}_`;
-    Object.keys(localStorage)
-      .filter(key => {
-        if (!key.startsWith(prefix)) return false;
-        const datePart = key.slice(prefix.length);
-        return /^\d{4}-\d{2}-\d{2}$/.test(datePart) && datePart < todayStr;
-      })
-      .forEach(key => localStorage.removeItem(key));
-  } catch {}
+async function fetchDuePlannedTodos(userId, todayStr) {
+  const { data, error } = await supabase
+    .from("todos")
+    .select("id,mode,todo_date,text,done,completed_at,created_at")
+    .eq("user_id", userId)
+    .eq("mode", "planned")
+    .eq("done", false)
+    .lte("todo_date", todayStr)
+    .order("todo_date", { ascending: true })
+    .order("created_at", { ascending: true });
+
+  if (error) {
+    console.error("Failed to fetch due planned todos:", error);
+    return [];
+  }
+
+  return normalizeTodos(data || []);
+}
+
+async function fetchPendingPoolTodos(userId) {
+  const { data, error } = await supabase
+    .from("todos")
+    .select("id,mode,todo_date,text,done,completed_at,created_at")
+    .eq("user_id", userId)
+    .eq("mode", "pool")
+    .eq("done", false)
+    .order("created_at", { ascending: true });
+
+  if (error) {
+    console.error("Failed to fetch pending pool todos:", error);
+    return [];
+  }
+
+  return normalizeTodos(data || []);
+}
+
+async function cleanupTodos(userId, todayStr) {
+  const plannedCutoff = getPlannedCleanupCutoffDate(todayStr);
+  const completedCutoff = new Date(Date.now() - TODO_POOL_CLEAR_HOURS * 60 * 60 * 1000).toISOString();
+
+  const { error: plannedError } = await supabase
+    .from("todos")
+    .delete()
+    .eq("user_id", userId)
+    .eq("mode", "planned")
+    .lt("todo_date", plannedCutoff);
+
+  if (plannedError) {
+    console.error("Failed to clean expired planned todos:", plannedError);
+  }
+
+  const { error: poolError } = await supabase
+    .from("todos")
+    .delete()
+    .eq("user_id", userId)
+    .eq("mode", "pool")
+    .eq("done", true)
+    .lt("completed_at", completedCutoff);
+
+  if (poolError) {
+    console.error("Failed to clean completed pool todos:", poolError);
+  }
 }
 
 /**
@@ -636,17 +736,21 @@ export default function App() {
   const [calendarYear, setCalendarYear] = useState("2026");
   const [inboxItems, setInboxItems] = useState([]);
   const [showTodo, setShowTodo] = useState(false);
+  const [todoMode, setTodoMode] = useState("planned");
   const [todoDate, setTodoDate] = useState(today);
-  const [dailyTodos, setDailyTodos] = useState([]);
-  const [todayTodos, setTodayTodos] = useState([]);
+  const [plannedTodos, setPlannedTodos] = useState([]);
+  const [poolTodos, setPoolTodos] = useState([]);
+  const [duePlannedTodos, setDuePlannedTodos] = useState([]);
+  const [pendingPoolTodos, setPendingPoolTodos] = useState([]);
   const [todoText, setTodoText] = useState("");
 
   const T = LANG[lang];
   const todoToday = today;
   const todoTomorrow = addTodoDays(todoToday, 1);
   const todoDayAfter = addTodoDays(todoToday, 2);
-  const pendingTodoCount = dailyTodos.filter(item => !item.done).length;
-  const todayPendingTodoCount = todayTodos.filter(item => !item.done).length;
+  const activeTodos = todoMode === "planned" ? plannedTodos : poolTodos;
+  const activePendingTodoCount = activeTodos.filter(item => !item.done).length;
+  const todoBadgeCount = duePlannedTodos.filter(item => !item.done).length + pendingPoolTodos.filter(item => !item.done).length;
 
   useEffect(() => {
     localStorage.setItem("xmum_semId", semId);
@@ -702,64 +806,184 @@ export default function App() {
   }, [user]);
 
   useEffect(() => {
-    setTodoDate(current => current < todoToday ? todoToday : current);
-  }, [today]);
+    setTodoDate(current => current || todoToday);
+  }, [todoToday]);
 
-  useEffect(() => {
+  async function refreshTodoSummary(activeDate = todoDate) {
     if (!user) {
-      setDailyTodos([]);
-      setTodayTodos([]);
+      setPlannedTodos([]);
+      setPoolTodos([]);
+      setDuePlannedTodos([]);
+      setPendingPoolTodos([]);
       return;
     }
 
-    cleanupOldDailyTodos(user.id, todoToday);
-    setDailyTodos(loadDailyTodos(user.id, todoDate));
-    setTodayTodos(loadDailyTodos(user.id, todoToday));
-  }, [user, today, todoDate]);
+    const [selectedPlanned, poolItems, duePlanned, pendingPool] = await Promise.all([
+      fetchPlannedTodos(user.id, activeDate),
+      fetchPoolTodos(user.id),
+      fetchDuePlannedTodos(user.id, todoToday),
+      fetchPendingPoolTodos(user.id),
+    ]);
 
-  function updateDailyTodos(nextTodos) {
-    setDailyTodos(nextTodos);
-
-    if (user) {
-      saveDailyTodos(user.id, todoDate, nextTodos);
-
-      if (todoDate === todoToday) {
-        setTodayTodos(nextTodos);
-      }
-    }
+    setPlannedTodos(selectedPlanned);
+    setPoolTodos(poolItems);
+    setDuePlannedTodos(duePlanned);
+    setPendingPoolTodos(pendingPool);
   }
 
-  function addDailyTodo() {
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadTodos() {
+      if (!user) {
+        setPlannedTodos([]);
+        setPoolTodos([]);
+        setDuePlannedTodos([]);
+        setPendingPoolTodos([]);
+        return;
+      }
+
+      await cleanupTodos(user.id, todoToday);
+
+      const [selectedPlanned, poolItems, duePlanned, pendingPool] = await Promise.all([
+        fetchPlannedTodos(user.id, todoDate),
+        fetchPoolTodos(user.id),
+        fetchDuePlannedTodos(user.id, todoToday),
+        fetchPendingPoolTodos(user.id),
+      ]);
+
+      if (cancelled) return;
+
+      setPlannedTodos(selectedPlanned);
+      setPoolTodos(poolItems);
+      setDuePlannedTodos(duePlanned);
+      setPendingPoolTodos(pendingPool);
+    }
+
+    loadTodos();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user, todoDate, todoToday]);
+
+  async function addTodo() {
     const text = todoText.trim();
 
     if (!text || !user) return;
 
-    updateDailyTodos([
-      ...dailyTodos,
-      {
-        id: makeSubjectId(),
+    const mode = todoMode === "pool" ? "pool" : "planned";
+
+    const { data, error } = await supabase
+      .from("todos")
+      .insert({
+        user_id: user.id,
+        mode,
+        todo_date: mode === "planned" ? todoDate : null,
         text,
         done: false,
-        createdAt: new Date().toISOString(),
-      },
-    ]);
+      })
+      .select("id,mode,todo_date,text,done,completed_at,created_at")
+      .single();
+
+    if (error) {
+      console.error("Failed to add todo:", error);
+      return;
+    }
+
+    const inserted = normalizeTodos([data])[0];
+
+    if (mode === "planned") {
+      setPlannedTodos(prev => [...prev, inserted]);
+    } else {
+      setPoolTodos(prev => [...prev, inserted]);
+    }
+
     setTodoText("");
+    refreshTodoSummary(todoDate);
   }
 
-  function toggleDailyTodo(id) {
-    updateDailyTodos(
-      dailyTodos.map(item =>
-        item.id === id ? { ...item, done: !item.done } : item
-      )
-    );
+  async function toggleTodo(id) {
+    if (!user) return;
+
+    const target = [...plannedTodos, ...poolTodos].find(item => item.id === id);
+    if (!target) return;
+
+    const nextDone = !target.done;
+
+    const { data, error } = await supabase
+      .from("todos")
+      .update({
+        done: nextDone,
+        completed_at: nextDone ? new Date().toISOString() : null,
+      })
+      .eq("id", id)
+      .select("id,mode,todo_date,text,done,completed_at,created_at")
+      .single();
+
+    if (error) {
+      console.error("Failed to update todo:", error);
+      return;
+    }
+
+    const updated = normalizeTodos([data])[0];
+
+    if (updated.mode === "planned") {
+      setPlannedTodos(prev => prev.map(item => item.id === id ? updated : item));
+    } else {
+      setPoolTodos(prev => prev.map(item => item.id === id ? updated : item));
+    }
+
+    refreshTodoSummary(todoDate);
   }
 
-  function deleteDailyTodo(id) {
-    updateDailyTodos(dailyTodos.filter(item => item.id !== id));
+  async function deleteTodo(id) {
+    if (!user) return;
+
+    const { error } = await supabase
+      .from("todos")
+      .delete()
+      .eq("id", id);
+
+    if (error) {
+      console.error("Failed to delete todo:", error);
+      return;
+    }
+
+    setPlannedTodos(prev => prev.filter(item => item.id !== id));
+    setPoolTodos(prev => prev.filter(item => item.id !== id));
+    refreshTodoSummary(todoDate);
   }
 
-  function clearDoneDailyTodos() {
-    updateDailyTodos(dailyTodos.filter(item => !item.done));
+  async function clearDoneTodos() {
+    if (!user) return;
+
+    let query = supabase
+      .from("todos")
+      .delete()
+      .eq("user_id", user.id)
+      .eq("done", true);
+
+    if (todoMode === "planned") {
+      query = query.eq("mode", "planned").eq("todo_date", todoDate);
+    } else {
+      query = query.eq("mode", "pool");
+    }
+
+    const { error } = await query;
+
+    if (error) {
+      console.error("Failed to clear completed todos:", error);
+      return;
+    }
+
+    if (todoMode === "planned") {
+      setPlannedTodos(prev => prev.filter(item => !item.done));
+    } else {
+      setPoolTodos(prev => prev.filter(item => !item.done));
+    }
+
+    refreshTodoSummary(todoDate);
   }
 
 
@@ -1447,9 +1671,9 @@ export default function App() {
           <button onClick={() => setShowTodo(s => !s)}
             style={{background:"none",border:"1px solid var(--border)",borderRadius:"6px",padding:"6px 12px",fontSize:"13px",cursor:"pointer",color:"var(--text-muted)",position:"relative"}}>
             {T.todo}
-            {todayPendingTodoCount > 0 && (
+            {todoBadgeCount > 0 && (
               <span style={{position:"absolute",top:"-6px",right:"-6px",minWidth:"16px",height:"16px",padding:"0 4px",borderRadius:"999px",background:"#2563eb",color:"white",fontSize:"10px",fontWeight:900,lineHeight:"16px"}}>
-                {todayPendingTodoCount}
+                {todoBadgeCount}
               </span>
             )}
           </button>
@@ -1513,84 +1737,107 @@ export default function App() {
             <div className="todo-modal-header">
               <div>
                 <div className="todo-title">{T.todoTitle}</div>
-                <div className="todo-subtitle">{formatDate(todoDate, dateStyle)} · {T.todoPending(pendingTodoCount)} · {T.todoTodayCount(todayPendingTodoCount)}</div>
+                <div className="todo-subtitle">
+                  {todoMode === "planned"
+                    ? `${formatDate(todoDate, dateStyle)} · ${T.todoPending(activePendingTodoCount)} · ${T.todoBadgeCount(todoBadgeCount)}`
+                    : `${T.todoPoolTab} · ${T.todoPending(activePendingTodoCount)} · ${T.todoBadgeCount(todoBadgeCount)}`}
+                </div>
               </div>
               <button className="todo-modal-close" onClick={() => setShowTodo(false)}>×</button>
             </div>
 
-            <div className="todo-hint">{T.todoHint}</div>
-
-            <div className="todo-date-row">
+            <div className="todo-mode-row">
               <button
-                className={todoDate === todoToday ? "todo-date-btn active" : "todo-date-btn"}
-                onClick={() => setTodoDate(todoToday)}
+                className={todoMode === "planned" ? "todo-mode-btn active" : "todo-mode-btn"}
+                onClick={() => setTodoMode("planned")}
               >
-                {T.todoToday}
+                {T.todoPlannedTab}
               </button>
               <button
-                className={todoDate === todoTomorrow ? "todo-date-btn active" : "todo-date-btn"}
-                onClick={() => setTodoDate(todoTomorrow)}
+                className={todoMode === "pool" ? "todo-mode-btn active" : "todo-mode-btn"}
+                onClick={() => setTodoMode("pool")}
               >
-                {T.todoTomorrow}
+                {T.todoPoolTab}
               </button>
-              <button
-                className={todoDate === todoDayAfter ? "todo-date-btn active" : "todo-date-btn"}
-                onClick={() => setTodoDate(todoDayAfter)}
-              >
-                {T.todoDayAfter}
-              </button>
-              <label className="todo-date-picker">
-                <span>{T.todoPickDate}</span>
-                <input
-                  type="date"
-                  min={todoToday}
-                  value={todoDate}
-                  onChange={e => setTodoDate(e.target.value || todoToday)}
-                />
-              </label>
             </div>
 
-            <div className="todo-selected-date">
-              {T.todoSelectedDate}: {formatDate(todoDate, dateStyle)}
+            <div className="todo-hint">
+              {todoMode === "planned" ? T.todoPlannedHint : T.todoPoolHint}
             </div>
+
+            {todoMode === "planned" && (
+              <>
+                <div className="todo-date-row">
+                  <button
+                    className={todoDate === todoToday ? "todo-date-btn active" : "todo-date-btn"}
+                    onClick={() => setTodoDate(todoToday)}
+                  >
+                    {T.todoToday}
+                  </button>
+                  <button
+                    className={todoDate === todoTomorrow ? "todo-date-btn active" : "todo-date-btn"}
+                    onClick={() => setTodoDate(todoTomorrow)}
+                  >
+                    {T.todoTomorrow}
+                  </button>
+                  <button
+                    className={todoDate === todoDayAfter ? "todo-date-btn active" : "todo-date-btn"}
+                    onClick={() => setTodoDate(todoDayAfter)}
+                  >
+                    {T.todoDayAfter}
+                  </button>
+                </div>
+
+                <div className="todo-selected-date">
+                  {T.todoSelectedDate}: {formatDate(todoDate, dateStyle)}
+                </div>
+              </>
+            )}
 
             <div className="todo-input-row">
               <input
                 value={todoText}
-                placeholder={T.todoPlaceholder}
+                placeholder={todoMode === "planned" ? T.todoPlannedPlaceholder : T.todoPoolPlaceholder}
                 onChange={e => setTodoText(e.target.value)}
                 onKeyDown={e => {
                   if (e.key === "Enter") {
                     e.preventDefault();
-                    addDailyTodo();
+                    addTodo();
                   }
                 }}
               />
-              <button onClick={addDailyTodo}>{T.todoAdd}</button>
+              <button onClick={addTodo}>{T.todoAdd}</button>
             </div>
 
             <div className="todo-list">
-              {dailyTodos.length === 0 ? (
-                <div className="todo-empty">{T.todoEmpty}</div>
+              {activeTodos.length === 0 ? (
+                <div className="todo-empty">
+                  {todoMode === "planned" ? T.todoEmptyPlanned : T.todoEmptyPool}
+                </div>
               ) : (
-                dailyTodos.map(item => (
+                activeTodos.map(item => (
                   <div key={item.id} className={item.done ? "todo-item todo-item-done" : "todo-item"}>
                     <button
                       className="todo-check"
-                      onClick={() => toggleDailyTodo(item.id)}
+                      onClick={() => toggleTodo(item.id)}
                       aria-label="Toggle todo"
                     >
                       {item.done ? "✓" : ""}
                     </button>
                     <span className="todo-text">{item.text}</span>
-                    <button className="todo-delete" onClick={() => deleteDailyTodo(item.id)}>×</button>
+                    {item.done && (
+                      <button className="todo-undo" onClick={() => toggleTodo(item.id)}>
+                        {T.todoUndo}
+                      </button>
+                    )}
+                    <button className="todo-delete" onClick={() => deleteTodo(item.id)}>×</button>
                   </div>
                 ))
               )}
             </div>
 
-            {dailyTodos.some(item => item.done) && (
-              <button className="todo-clear-done" onClick={clearDoneDailyTodos}>
+            {activeTodos.some(item => item.done) && (
+              <button className="todo-clear-done" onClick={clearDoneTodos}>
                 {T.todoClearDone}
               </button>
             )}
