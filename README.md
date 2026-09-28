@@ -162,6 +162,10 @@
 
 点击 Legend 栏右侧的 **📅 校历** 按钮，可在弹窗中查看对应学年的完整校历图，并支持一键下载保存。
 
+#### 课程表截图
+
+点击校历旁的 **课程表** 按钮，可为当前学期上传 PNG、JPG 或 WebP 课程表截图（最大 10 MB），随时查看、切换原图大小、更换或删除。每个账号和学期分别保存一张截图。图片保存在当前浏览器中，清除网站数据后会丢失，也不会跨设备同步。
+
 ### 数据同步说明
 
 同一账号在不同设备登录时，可同步以下内容：
@@ -173,6 +177,7 @@
 | 分享请求 | `shared_events` | 是 |
 | 用户邮箱映射 | `profiles` | 是 |
 | 待办清单 | `todos` | 是 |
+| 课程表截图 | 浏览器 IndexedDB | 否 |
 | 语言 / 日期样式等本地偏好 | localStorage | 仅当前浏览器 |
 
 ### 隐私说明
@@ -346,6 +351,10 @@ Events shared by others appear in the **Inbox** in the top bar.
 
 Click the **📅 Academic Calendar** button on the right side of the Legend bar to view the full academic calendar for the selected year in a pop-up. You can also download the image directly.
 
+#### Timetable Screenshot
+
+Click **Timetable** beside Academic Calendar to upload a PNG, JPG, or WebP screenshot for the selected semester (up to 10 MB). You can view it, switch to actual size, replace it, or remove it. One image is saved per account and semester in the current browser. Clearing site data removes it, and it does not sync across devices.
+
 ### Data Synchronization
 
 When the same account is used across devices, the following data can sync:
@@ -357,6 +366,7 @@ When the same account is used across devices, the following data can sync:
 | Shared event requests | `shared_events` | Yes |
 | User email mapping | `profiles` | Yes |
 | To-do list | `todos` | Yes |
+| Timetable screenshot | Browser IndexedDB | No |
 | Language / date style and other local preferences | localStorage | Current browser only |
 
 ### Privacy

@@ -202,7 +202,8 @@ a {
   margin-left: auto;
 }
 
-.legend-calendar-btn button {
+.legend-calendar-btn button,
+.legend-timetable-btn button {
   border: none !important;
   background: transparent !important;
   color: var(--accent) !important;
@@ -210,6 +211,10 @@ a {
   font-size: 11px !important;
   font-weight: 800 !important;
   cursor: pointer !important;
+}
+
+.legend-timetable-btn {
+  margin-left: 0;
 }
 
 /* ───────────────── MAIN LAYOUT ───────────────── */
@@ -1033,6 +1038,68 @@ a {
   height: auto;
   border-radius: 10px;
   background: #ffffff;
+}
+
+.timetable-modal-header {
+  height: auto;
+  min-height: 64px;
+  flex-wrap: wrap;
+  padding-top: 9px;
+  padding-bottom: 9px;
+}
+
+.timetable-storage-note {
+  margin-top: 3px;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.timetable-file-input {
+  display: none;
+}
+
+.timetable-delete {
+  color: #dc2626;
+}
+
+.timetable-error {
+  padding: 8px 18px;
+  background: #fef2f2;
+  color: #b91c1c;
+  font-size: 12px;
+}
+
+.timetable-image-wrap {
+  display: block;
+}
+
+.timetable-image-original {
+  width: auto;
+  max-width: none;
+}
+
+.timetable-empty {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  color: var(--text-muted);
+  font-size: 13px;
+  text-align: center;
+  padding: 24px;
+}
+
+.timetable-empty strong {
+  color: var(--text);
+  font-size: 15px;
+}
+
+.timetable-empty-icon {
+  color: var(--accent);
+  font-size: 42px;
+  line-height: 1;
 }
 
 /* ───────────────── MOBILE ───────────────── */

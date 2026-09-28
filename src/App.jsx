@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import "./App.css";
 import { supabase } from "./supabase";
+import TimetableViewer from "./TimetableViewer";
 
 console.log("XMUM build: dual-synced-todo-20260515-v10");
 
@@ -733,6 +734,7 @@ export default function App() {
   const [shareNote, setShareNote] = useState("");
   const [showInbox, setShowInbox] = useState(false);
   const [showCalendar, setShowCalendar] = useState(false);
+  const [showTimetable, setShowTimetable] = useState(false);
   const [calendarYear, setCalendarYear] = useState("2026");
   const [inboxItems, setInboxItems] = useState([]);
   const [showTodo, setShowTodo] = useState(false);
@@ -1729,6 +1731,11 @@ export default function App() {
             {lang === "zh" ? "📅 校历" : "📅 Academic Calendar"}
           </button>
         </span>
+        <span className="legend-item legend-timetable-btn">
+          <button onClick={() => setShowTimetable(true)}>
+            {lang === "zh" ? "▦ 课程表" : "▦ Timetable"}
+          </button>
+        </span>
       </div>
 
       {showTodo && (
@@ -2051,6 +2058,17 @@ export default function App() {
             </div>
           </div>
         </div>
+      )}
+
+      {showTimetable && (
+        <TimetableViewer
+          key={`${user.id}:${semId}`}
+          userId={user.id}
+          semesterId={semId}
+          semesterLabel={(SEMESTERS.find(semester => semester.id === semId) || SEMESTERS[0]).label}
+          lang={lang}
+          onClose={() => setShowTimetable(false)}
+        />
       )}
 
       {showShare && (
