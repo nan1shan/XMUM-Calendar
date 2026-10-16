@@ -25,6 +25,13 @@
 5. 点击 **+ 添加** 创建事项，依次选择课程 / 自定义项、事项类型、标题、地点和时间
 6. 点击 **✓** 标记完成，**✏️** 编辑（含修改日期），**🗑** 删除
 7. 点击顶栏 **待办清单**，记录不适合放入正式日历的临时任务
+8. 点击图例栏 **未来7天**，查看滚动的七日课程事项与每日计划
+
+#### 每日计划
+
+每日计划与正式日历事项、旧版待办清单分开保存。选择日期后，可分别在上午和下午添加、编辑、完成、排序或移动计划任务。月历日期格会显示计划完成数，图例栏的 **未来7天** 可查看今天起连续七天的日历事项和计划。每日计划不会因日期过去而自动清理。
+
+首次使用前，请在 Supabase SQL Editor 执行 [`supabase/migrations/20261016_daily_planner_tasks.sql`](supabase/migrations/20261016_daily_planner_tasks.sql)。
 
 ### 功能说明
 
@@ -366,6 +373,7 @@ When the same account is used across devices, the following data can sync:
 | Shared event requests | `shared_events` | Yes |
 | User email mapping | `profiles` | Yes |
 | To-do list | `todos` | Yes |
+| Daily Planner | `daily_planner_tasks` | Yes |
 | Timetable screenshot | Browser IndexedDB | No |
 | Language / date style and other local preferences | localStorage | Current browser only |
 

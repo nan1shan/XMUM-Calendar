@@ -2,6 +2,9 @@ import { useState, useEffect } from "react";
 import "./App.css";
 import { supabase } from "./supabase";
 import TimetableViewer from "./TimetableViewer";
+import RollingOverview, { PlannerSections } from "./DailyPlanner";
+import { createDailyPlannerTask, deleteDailyPlannerTask, fetchDailyPlannerTasks, updateDailyPlannerTask, updateDailyPlannerTaskOrder } from "./dailyPlannerApi";
+import { getLocalDate } from "./dailyPlannerUtils";
 
 console.log("XMUM build: dual-synced-todo-20260515-v10");
 
@@ -349,26 +352,6 @@ function sanitizeSubjects(rawSubjects) {
   return cleaned;
 }
 
-function getSubjectStorageKey(userId, semId) {
-  return `xmum_subjects_${userId}_${semId}`;
-}
-
-function getLegacyCourseStorageKey(userId, semId) {
-  return `xmum_courses_${userId}_${semId}`;
-}
-
-function loadLocalSemesterSubjects(userId, semId) {
-  try {
-    const raw =
-      localStorage.getItem(getSubjectStorageKey(userId, semId)) ||
-      localStorage.getItem(getLegacyCourseStorageKey(userId, semId));
-
-    return raw ? JSON.parse(raw) : [];
-  } catch {
-    return [];
-  }
-}
-
 async function fetchSemesterSubjects(userId, semId) {
   const { data, error } = await supabase
     .from("user_labels")
@@ -462,9 +445,10 @@ async function updateSemesterSubjectColor(id, color) {
 
 
 function addDays(dateStr, days) {
-  const d = new Date(dateStr + "T00:00:00");
+  const [year, month, day] = dateStr.split("-").map(Number);
+  const d = new Date(year, month - 1, day);
   d.setDate(d.getDate() + days);
-  return d.toISOString().split("T")[0];
+  return getLocalDate(d);
 }
 
 function formatDate(dateStr, style) {
@@ -494,10 +478,8 @@ function getCellType(dateStr, specialRanges) {
   return "normal";
 }
 
-function getTodayUTC8() {
-  const now = new Date();
-  const utc8 = new Date(now.getTime() + 8 * 60 * 60 * 1000);
-  return utc8.toISOString().split("T")[0];
+function getTodayLocal() {
+  return getLocalDate();
 }
 
 function addTodoDays(dateStr, days) {
@@ -527,11 +509,7 @@ function saveCache(userId, semId, data) {
   try {
     localStorage.setItem(getCacheKey(userId, semId), JSON.stringify(data));
     localStorage.setItem(`${getCacheKey(userId, semId)}_ts`, Date.now().toString());
-  } catch {}
-}
-function getCacheTs(userId, semId) {
-  const ts = localStorage.getItem(`${getCacheKey(userId, semId)}_ts`);
-  return ts ? parseInt(ts) : 0;
+  } catch { /* Cache storage is best effort. */ }
 }
 
 const TODO_POOL_CLEAR_HOURS = 12;
@@ -689,7 +667,7 @@ function getCellUrgency(dayEvents, date, today) {
 }
 
 export default function App() {
-  const today = getTodayUTC8();
+  const [today, setToday] = useState(getTodayLocal);
   const [user, setUser] = useState(undefined);
   const [authMode, setAuthMode] = useState("login");
   const [authEmail, setAuthEmail] = useState(() => {
@@ -724,7 +702,6 @@ export default function App() {
   const [newCourseColor, setNewCourseColor] = useState(COURSE_COLORS[0]);
   const [newCustomLabel, setNewCustomLabel] = useState("");
   const [newCustomColor, setNewCustomColor] = useState(CUSTOM_SUBJECT_COLORS[0]);
-  const [customTypes, setCustomTypes] = useState([]);
   const [shareEmail, setShareEmail] = useState("");
   const [shareRange, setShareRange] = useState("sem");
   const [shareDateRanges, setShareDateRanges] = useState([{ from: "", to: "" }]);
@@ -745,6 +722,12 @@ export default function App() {
   const [duePlannedTodos, setDuePlannedTodos] = useState([]);
   const [pendingPoolTodos, setPendingPoolTodos] = useState([]);
   const [todoText, setTodoText] = useState("");
+  const [plannerTasks, setPlannerTasks] = useState([]);
+  const [plannerLoadedUserId, setPlannerLoadedUserId] = useState(null);
+  const [plannerError, setPlannerError] = useState("");
+  const [showRollingOverview, setShowRollingOverview] = useState(false);
+  const [rollingStartDate, setRollingStartDate] = useState(getTodayLocal);
+  const [rollingEvents, setRollingEvents] = useState([]);
 
   const T = LANG[lang];
   const todoToday = today;
@@ -753,10 +736,30 @@ export default function App() {
   const activeTodos = todoMode === "planned" ? plannedTodos : poolTodos;
   const activePendingTodoCount = activeTodos.filter(item => !item.done).length;
   const todoBadgeCount = duePlannedTodos.filter(item => !item.done).length + pendingPoolTodos.filter(item => !item.done).length;
+  const plannerLoading = Boolean(user && plannerLoadedUserId !== user.id);
+  const rollingEndDate = addDays(rollingStartDate, 6);
+  const overviewEvents = [...events, ...rollingEvents]
+    .filter(event => event.date >= rollingStartDate && event.date <= rollingEndDate)
+    .filter((event, index, all) => all.findIndex(item => item.id === event.id) === index);
+  const plannerCountsByDate = plannerTasks.reduce((counts, task) => {
+    const count = counts[task.task_date] || (counts[task.task_date] = { completed: 0, total: 0 });
+    count.total += 1;
+    if (task.is_completed) count.completed += 1;
+    return counts;
+  }, {});
+
+  useEffect(() => {
+    const updateToday = () => setToday(getTodayLocal());
+    const timer = window.setInterval(updateToday, 60_000);
+    window.addEventListener("focus", updateToday);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener("focus", updateToday);
+    };
+  }, []);
 
   useEffect(() => {
     localStorage.setItem("xmum_semId", semId);
-    setEvents([]);
   }, [semId]);
   useEffect(() => { localStorage.setItem("xmum_startDay", startDay); }, [startDay]);
   useEffect(() => { localStorage.setItem("xmum_dateStyle", dateStyle); }, [dateStyle]);
@@ -768,6 +771,12 @@ export default function App() {
     });
     const { data: listener } = supabase.auth.onAuthStateChange((event, session) => {
       setUser(session?.user ?? null);
+      if (event === "SIGNED_OUT" || event === "SIGNED_IN" || event === "INITIAL_SESSION") {
+        setEvents([]);
+      }
+      setPlannerTasks([]);
+      setPlannerError("");
+      setPlannerLoadedUserId(null);
       if (event === "PASSWORD_RECOVERY") {
         setResetMode(true);
       }
@@ -776,7 +785,48 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (!user) { setEvents([]); return; }
+    let cancelled = false;
+    if (!user) return () => { cancelled = true; };
+    fetchDailyPlannerTasks(user.id).then(({ data, error }) => {
+      if (cancelled) return;
+      setPlannerLoadedUserId(user.id);
+      if (error) {
+        console.error("Failed to fetch daily planner tasks:", error);
+        setPlannerError(error.message || "Failed to load planner tasks");
+      } else {
+        setPlannerTasks(data || []);
+        setPlannerError("");
+      }
+    });
+    return () => { cancelled = true; };
+  }, [user]);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!user || !showRollingOverview) return () => { cancelled = true; };
+    supabase.from("events")
+      .select("id,date,type,course,title,location,time,done")
+      .eq("user_id", user.id)
+      .gte("date", rollingStartDate)
+      .lte("date", rollingEndDate)
+      .then(({ data, error }) => {
+        if (cancelled) return;
+        if (error) {
+          console.error("Failed to fetch events for rolling overview:", error);
+          return;
+        }
+        const rangeRows = data || [];
+        setRollingEvents(rangeRows);
+        setEvents(current => {
+          const currentIds = new Set(current.map(event => event.id));
+          return [...current, ...rangeRows.filter(event => !currentIds.has(event.id))];
+        });
+      });
+    return () => { cancelled = true; };
+  }, [user, showRollingOverview, rollingStartDate, rollingEndDate]);
+
+  useEffect(() => {
+    if (!user) return;
     const sem_ = SEMESTERS.find(s => s.id === semId) || SEMESTERS[0];
     const semEnd = addDays(sem_.start, sem_.totalWeeks * 7);
 
@@ -800,16 +850,6 @@ export default function App() {
         saveCache(user.id, semId, filtered);
       });
   }, [user, semId]);
-
-  useEffect(() => {
-    if (!user) { setCustomTypes([]); return; }
-    supabase.from("custom_types").select("*").eq("user_id", user.id)
-      .then(({ data }) => setCustomTypes(data || []));
-  }, [user]);
-
-  useEffect(() => {
-    setTodoDate(current => current || todoToday);
-  }, [todoToday]);
 
   async function refreshTodoSummary(activeDate = todoDate) {
     if (!user) {
@@ -986,6 +1026,79 @@ export default function App() {
     }
 
     refreshTodoSummary(todoDate);
+  }
+
+  function setPlannerOperationError(error) {
+    console.error("Daily planner operation failed:", error);
+    setPlannerError(error?.message || "Planner update failed");
+  }
+
+  async function createPlannerTask({ task_date, period, title }) {
+    if (!user || !title?.trim()) return false;
+    setPlannerError("");
+    const sectionTasks = plannerTasks.filter(task => task.task_date === task_date && task.period === period);
+    const { data, error } = await createDailyPlannerTask(user.id, {
+      task_date,
+      period,
+      title: title.trim(),
+      is_completed: false,
+      sort_order: sectionTasks.reduce((max, task) => Math.max(max, task.sort_order ?? -1), -1) + 1,
+    });
+    if (error) { setPlannerOperationError(error); return false; }
+    setPlannerTasks(current => [...current, data]);
+    return true;
+  }
+
+  async function updatePlannerTask(task, changes) {
+    if (!user || !task?.id) return false;
+    setPlannerError("");
+    const { data, error } = await updateDailyPlannerTask(user.id, task.id, changes);
+    if (error) { setPlannerOperationError(error); return false; }
+    setPlannerTasks(current => current.map(item => item.id === task.id ? data : item));
+    return true;
+  }
+
+  async function togglePlannerTask(task) {
+    return updatePlannerTask(task, { is_completed: !task.is_completed });
+  }
+
+  async function removePlannerTask(task) {
+    if (!user) return false;
+    setPlannerError("");
+    const { error } = await deleteDailyPlannerTask(user.id, task.id);
+    if (error) { setPlannerOperationError(error); return false; }
+    setPlannerTasks(current => current.filter(item => item.id !== task.id));
+    return true;
+  }
+
+  async function movePlannerTask(task, taskDate, period) {
+    const destination = plannerTasks.filter(item => item.id !== task.id && item.task_date === taskDate && item.period === period);
+    const sort_order = destination.reduce((max, item) => Math.max(max, item.sort_order ?? -1), -1) + 1;
+    return updatePlannerTask(task, { task_date: taskDate, period, sort_order });
+  }
+
+  async function reorderPlannerTasks(sectionTasks, index, direction) {
+    if (!user) return;
+    const adjacentIndex = index + direction;
+    if (adjacentIndex < 0 || adjacentIndex >= sectionTasks.length) return;
+    const currentTask = sectionTasks[index];
+    const adjacentTask = sectionTasks[adjacentIndex];
+    setPlannerError("");
+    const { error } = await updateDailyPlannerTaskOrder(user.id, [
+      { id: currentTask.id, sort_order: adjacentTask.sort_order },
+      { id: adjacentTask.id, sort_order: currentTask.sort_order },
+    ]);
+    if (error) {
+      setPlannerOperationError(error);
+      const { data } = await fetchDailyPlannerTasks(user.id);
+      if (data) setPlannerTasks(data);
+      return;
+    }
+    setPlannerTasks(current => current.map(task => {
+      if (task.id === currentTask.id) return { ...task, sort_order: adjacentTask.sort_order };
+      if (task.id === adjacentTask.id) return { ...task, sort_order: currentTask.sort_order };
+      return task;
+    }));
   }
 
 
@@ -1433,22 +1546,6 @@ export default function App() {
     });
   }
 
-
-  async function addCustomType() {
-    if (!newTypeLabel.trim() || !user) return;
-    if (customTypes.length >= 5) return;
-    const { data } = await supabase.from("custom_types")
-      .insert({ user_id: user.id, label: newTypeLabel.trim(), color: newTypeColor })
-      .select().single();
-    if (data) setCustomTypes(prev => [...prev, data]);
-    setNewTypeLabel("");
-  }
-
-  async function deleteCustomType(id) {
-    await supabase.from("custom_types").delete().eq("id", id);
-    setCustomTypes(prev => prev.filter(t => t.id !== id));
-  }
-
   const sem = SEMESTERS.find(s => s.id === semId) || SEMESTERS[0];
   const dayLabels  = startDay === "Mon" ? DAYS_MON : DAYS_SUN;
   const weekendCols = startDay === "Mon" ? WEEKENDS_MON : WEEKENDS_SUN;
@@ -1501,6 +1598,8 @@ export default function App() {
         new Notification(T.upcoming(effectiveDiff, e.title));
       });
     });
+  // Intentionally notify only on sign-in/day changes to avoid repeating all alerts on every event edit.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, today]);
 
   const selEvents = selectedDate ? getEventsForDate(selectedDate) : [];
@@ -1652,7 +1751,7 @@ export default function App() {
           <span>{T.title}</span>
         </div>
         <div className="topbar-controls">
-          <select value={semId} onChange={e => setSemId(e.target.value)}>
+          <select value={semId} onChange={e => { setEvents([]); setSemId(e.target.value); }}>
             {SEMESTERS.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
           </select>
           <select value={startDay} onChange={e => setStartDay(e.target.value)}>
@@ -1725,6 +1824,11 @@ export default function App() {
         <span className="legend-item">
           <span className="legend-dot" style={{ background: "#22c55e" }} />
           <span style={{ color: "#22c55e", fontWeight: 600 }}>{T.countdown3d}</span>
+        </span>
+        <span className="legend-item rolling-entry">
+          <button onClick={() => { setRollingStartDate(today); setShowRollingOverview(true); }}>
+            {lang === "zh" ? "未来7天" : "Upcoming 7 Days"}
+          </button>
         </span>
         <span className="legend-item legend-calendar-btn">
           <button onClick={() => setShowCalendar(true)}>
@@ -2243,6 +2347,39 @@ export default function App() {
       <div className={`main ${panelOpen || selectedWeek ? "panel-open" : "panel-closed"}`}>
         {/* CALENDAR */}
         <div className="calendar-wrap">
+          {showRollingOverview ? (
+            <RollingOverview
+              startDate={rollingStartDate}
+              today={today}
+              events={overviewEvents}
+              tasks={plannerTasks}
+              lang={lang}
+              loading={plannerLoading}
+              error={plannerError}
+              getTypeInfo={getTypeInfo}
+              getVisualColor={getVisualColor}
+              getSubjectClass={getSubjectClass}
+              onStartDate={setRollingStartDate}
+              onOpenDate={date => {
+                const rangeEvents = rollingEvents.filter(event => event.date === date);
+                setEvents(current => {
+                  const currentIds = new Set(current.map(event => event.id));
+                  return [...current, ...rangeEvents.filter(event => !currentIds.has(event.id))];
+                });
+                setSelectedDate(date);
+                setSelectedWeek(null);
+                setShowForm(false);
+                setTransferring(null);
+              }}
+              onCreate={createPlannerTask}
+              onUpdate={updatePlannerTask}
+              onToggle={togglePlannerTask}
+              onDelete={removePlannerTask}
+              onMove={movePlannerTask}
+              onReorder={reorderPlannerTasks}
+              onClose={() => setShowRollingOverview(false)}
+            />
+          ) : (
           <table className="cal-table">
             <colgroup>
               <col className="col-week" />
@@ -2308,6 +2445,7 @@ export default function App() {
                     const isExam = cellType === "exam";
                     const isRevision = cellType === "revision";
                     const urgency = getCellUrgency(dayEvents, date, today);
+                    const plannerProgress = plannerCountsByDate[date];
 
                     // Classes: exam always red; revision only when no events; holiday bg removed
                     let cls = "cal-cell";
@@ -2361,6 +2499,12 @@ export default function App() {
                               )}
                             </span>
                           </div>
+                          {plannerProgress && (
+                            <div className="calendar-planner-progress" title={`${plannerProgress.completed}/${plannerProgress.total} ${lang === "zh" ? "项计划已完成" : "planner tasks complete"}`}>
+                              <span>{lang === "zh" ? "计划" : "Tasks"} {plannerProgress.completed}/{plannerProgress.total}</span>
+                              <i><b style={{ width: `${Math.round((plannerProgress.completed / plannerProgress.total) * 100)}%` }} /></i>
+                            </div>
+                          )}
                           {visibleCellEvents.length > 0 && (
                             <div className="cell-events-preview">
                               {visibleCellEvents.map(ev => {
@@ -2419,6 +2563,7 @@ export default function App() {
               ))}
             </tbody>
           </table>
+          )}
         </div>
 
         {/* RIGHT PANEL */}
@@ -2663,6 +2808,7 @@ export default function App() {
                     </div>
                   )}
 
+                  <div className="day-calendar-section-title">{lang === "zh" ? "日历事项" : "Calendar Events"}</div>
                   <div className="event-list">
                     {selEvents.length === 0 && !showForm && (
                       <div className="no-events">{T.noEvents}</div>
@@ -2726,6 +2872,19 @@ export default function App() {
                       );
                     })}
                   </div>
+                  <PlannerSections
+                    date={selectedDate}
+                    tasks={plannerTasks}
+                    lang={lang}
+                    loading={plannerLoading}
+                    error={plannerError}
+                    onCreate={createPlannerTask}
+                    onUpdate={updatePlannerTask}
+                    onToggle={togglePlannerTask}
+                    onDelete={removePlannerTask}
+                    onMove={movePlannerTask}
+                    onReorder={reorderPlannerTasks}
+                  />
                 </>
               )}
             </>
