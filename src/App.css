@@ -755,15 +755,25 @@ a {
 }
 
 .planner-task {
-  display: grid;
-  grid-template-columns: 20px minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 6px;
-  min-height: 30px;
-  padding: 4px 5px;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 5px;
+  min-width: 0;
+  min-height: 48px;
+  padding: 7px;
   border: 1px solid #e5edf7;
   border-radius: 9px;
   background: #fff;
+}
+
+.planner-task-content {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr);
+  align-items: start;
+  gap: 8px;
+  min-width: 0;
+  width: 100%;
 }
 
 .planner-check {
@@ -786,12 +796,18 @@ a {
 }
 
 .planner-task-title {
+  grid-column: 2;
+  display: block;
+  width: 100%;
   min-width: 0;
   color: #334155;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 650;
-  line-height: 1.35;
+  line-height: 1.5;
+  white-space: normal;
+  word-break: normal;
   overflow-wrap: anywhere;
+  writing-mode: horizontal-tb;
 }
 
 .planner-task.is-complete .planner-task-title {
@@ -800,16 +816,22 @@ a {
 }
 
 .planner-task-actions {
-  display: inline-flex;
-  gap: 1px;
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  min-width: 0;
+  padding-top: 4px;
+  border-top: 1px solid #f1f5f9;
 }
 
 .planner-task-actions button,
 .planner-inline-editor button,
 .planner-move-controls button {
-  min-width: 22px;
-  height: 23px;
-  padding: 0 4px;
+  min-width: 28px;
+  height: 27px;
+  padding: 0 6px;
   border: 0;
   border-radius: 6px;
   background: transparent;
@@ -838,11 +860,16 @@ a {
 
 .planner-inline-editor,
 .planner-move-controls {
-  grid-column: 2 / -1;
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 5px;
   min-width: 0;
+  width: 100%;
+}
+
+.planner-inline-editor {
+  grid-column: 2;
 }
 
 .planner-inline-editor input,
@@ -861,6 +888,8 @@ a {
 .planner-move-controls label {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
+  min-width: 0;
   gap: 4px;
   color: #64748b;
   font-size: 10px;
@@ -1112,8 +1141,8 @@ a {
 }
 
 .rolling-day-content .planner-periods {
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 10px;
 }
 
 .rolling-day-content .planner-period {
@@ -1129,8 +1158,8 @@ a {
 }
 
 .rolling-day-content .planner-task-actions button {
-  min-width: 19px;
-  padding: 0 2px;
+  min-width: 28px;
+  padding: 0 6px;
   font-size: 10px;
 }
 
@@ -1147,7 +1176,7 @@ a {
   }
 
   .rolling-day-content .planner-periods {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
     gap: 5px;
   }
 

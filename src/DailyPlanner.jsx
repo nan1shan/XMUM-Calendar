@@ -55,16 +55,18 @@ function TaskList({ date, period, tasks, lang, onToggle, onEdit, onDelete, onMov
         <ul className="planner-task-list">
           {ordered.map((task, index) => (
             <li key={task.id} className={`planner-task ${task.is_completed ? "is-complete" : ""}`}>
-              <button className="planner-check" type="button" aria-label={task.is_completed ? "Mark incomplete" : "Mark complete"}
-                onClick={() => onToggle(task)}>{task.is_completed ? "✓" : ""}</button>
-              {editingId === task.id ? (
-                <div className="planner-inline-editor">
-                  <input autoFocus value={editText} maxLength={300} onChange={event => setEditText(event.target.value)}
-                    onKeyDown={event => { if (event.key === "Enter") { event.preventDefault(); onEdit(task, { title: editText.trim() }).then(ok => ok && setEditingId(null)); } }} />
-                  <button type="button" onClick={() => onEdit(task, { title: editText.trim() }).then(ok => ok && setEditingId(null))}>{t.save}</button>
-                  <button type="button" className="quiet" onClick={() => setEditingId(null)}>{t.cancel}</button>
-                </div>
-              ) : <span className="planner-task-title">{task.title}</span>}
+              <div className="planner-task-content">
+                <button className="planner-check" type="button" aria-label={task.is_completed ? "Mark incomplete" : "Mark complete"}
+                  onClick={() => onToggle(task)}>{task.is_completed ? "✓" : ""}</button>
+                {editingId === task.id ? (
+                  <div className="planner-inline-editor">
+                    <input autoFocus value={editText} maxLength={300} onChange={event => setEditText(event.target.value)}
+                      onKeyDown={event => { if (event.key === "Enter") { event.preventDefault(); onEdit(task, { title: editText.trim() }).then(ok => ok && setEditingId(null)); } }} />
+                    <button type="button" onClick={() => onEdit(task, { title: editText.trim() }).then(ok => ok && setEditingId(null))}>{t.save}</button>
+                    <button type="button" className="quiet" onClick={() => setEditingId(null)}>{t.cancel}</button>
+                  </div>
+                ) : <span className="planner-task-title">{task.title}</span>}
+              </div>
               <div className="planner-task-actions">
                 <button type="button" title={t.earlier} aria-label={t.earlier} disabled={index === 0} onClick={() => onReorder(ordered, index, -1)}>↑</button>
                 <button type="button" title={t.later} aria-label={t.later} disabled={index === ordered.length - 1} onClick={() => onReorder(ordered, index, 1)}>↓</button>
