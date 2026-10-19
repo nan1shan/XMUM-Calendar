@@ -373,6 +373,18 @@ a {
   box-shadow: inset 0 0 0 2px rgba(37, 99, 235, 0.18);
 }
 
+.cal-cell.outside-semester-empty {
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+  cursor: default;
+}
+
+.cal-cell.outside-semester-empty:hover {
+  border-color: transparent;
+  background: transparent;
+}
+
 .cell-content {
   display: flex;
   flex-direction: column;

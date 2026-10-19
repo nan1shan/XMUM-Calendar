@@ -4,7 +4,7 @@ import { supabase } from "./supabase";
 import TimetableViewer from "./TimetableViewer";
 import RollingOverview, { PlannerSections } from "./DailyPlanner";
 import { createDailyPlannerTask, deleteDailyPlannerTask, fetchDailyPlannerTasks, updateDailyPlannerTask, updateDailyPlannerTaskOrder } from "./dailyPlannerApi";
-import { getLocalDate } from "./dailyPlannerUtils";
+import { getAlignedWeekDates, getAlignedWeekRowCount, getDateInTimeZone, getLocalDate, shouldShowPlannerReminder } from "./dailyPlannerUtils";
 
 console.log("XMUM build: dual-synced-todo-20260515-v10");
 
@@ -478,8 +478,8 @@ function getCellType(dateStr, specialRanges) {
   return "normal";
 }
 
-function getTodayLocal() {
-  return getLocalDate();
+function getTodayMalaysia() {
+  return getDateInTimeZone();
 }
 
 function addTodoDays(dateStr, days) {
@@ -667,7 +667,7 @@ function getCellUrgency(dayEvents, date, today) {
 }
 
 export default function App() {
-  const [today, setToday] = useState(getTodayLocal);
+  const [today, setToday] = useState(getTodayMalaysia);
   const [user, setUser] = useState(undefined);
   const [authMode, setAuthMode] = useState("login");
   const [authEmail, setAuthEmail] = useState(() => {
@@ -726,7 +726,7 @@ export default function App() {
   const [plannerLoadedUserId, setPlannerLoadedUserId] = useState(null);
   const [plannerError, setPlannerError] = useState("");
   const [showRollingOverview, setShowRollingOverview] = useState(false);
-  const [rollingStartDate, setRollingStartDate] = useState(getTodayLocal);
+  const [rollingStartDate, setRollingStartDate] = useState(getTodayMalaysia);
   const [rollingEvents, setRollingEvents] = useState([]);
 
   const T = LANG[lang];
@@ -749,7 +749,7 @@ export default function App() {
   }, {});
 
   useEffect(() => {
-    const updateToday = () => setToday(getTodayLocal());
+    const updateToday = () => setToday(getTodayMalaysia());
     const timer = window.setInterval(updateToday, 60_000);
     window.addEventListener("focus", updateToday);
     return () => {
@@ -1552,23 +1552,26 @@ export default function App() {
 
   function getWeekDates(wi) {
     const base = wi * 7;
-    if (startDay === "Mon")
-      return Array.from({ length: 7 }, (_, i) => addDays(sem.start, base + i));
-    else
-      return Array.from({ length: 7 }, (_, i) => addDays(sem.start, base + i - 1));
+    return Array.from({ length: 7 }, (_, i) => addDays(sem.start, base + i));
   }
 
+  const calendarRowCount = getAlignedWeekRowCount(sem.start, sem.totalWeeks, startDay);
+
   const rows = [];
+  const semesterLastDate = addDays(sem.start, sem.totalWeeks * 7 - 1);
   let normalCount = 0;
-  for (let wi = 0; wi < sem.totalWeeks; wi++) {
-    const dates = getWeekDates(wi);
-    const wed = dates.find(d => new Date(d + "T00:00:00").getDay() === 3) || dates[2];
-    const rowType = getCellType(wed, sem.specialRanges);
+  for (let wi = 0; wi < calendarRowCount; wi++) {
+    const dates = getAlignedWeekDates(sem.start, startDay, wi);
+    const hasAcademicWeek = wi < sem.totalWeeks;
+    const academicDates = hasAcademicWeek ? getWeekDates(wi) : [];
+    const wed = academicDates.find(d => new Date(d + "T00:00:00").getDay() === 3) || academicDates[2];
+    const rowType = hasAcademicWeek ? getCellType(wed, sem.specialRanges) : "normal";
     let label, labelClass;
-    if (rowType === "revision") { label = "REV"; labelClass = "rev"; }
+    if (!hasAcademicWeek) { label = ""; labelClass = ""; }
+    else if (rowType === "revision") { label = "REV"; labelClass = "rev"; }
     else if (rowType === "exam") { label = "EXAM"; labelClass = "exam"; }
     else { normalCount++; label = `Week ${normalCount}`; labelClass = ""; }
-    rows.push({ dates, label, labelClass, rowType });
+    rows.push({ dates, label, labelClass, rowType, weekIndex: hasAcademicWeek ? wi : null });
   }
 
   function getWeekEventKey(sid, weekLabel) { return `WEEK:${sid}:${weekLabel}`; }
@@ -2405,20 +2408,25 @@ export default function App() {
               {rows.map((row, ri) => (
                 <tr key={ri}>
                   {(() => {
-                    const weekEvs = getEventsForWeek(row.label).filter(e => !e.done);
+                    const weekEvs = row.label ? getEventsForWeek(row.label).filter(e => !e.done) : [];
                     const weekColor = weekEvs.length > 0 ? getVisualColor(weekEvs[0]) : null;
                     return (
                       <td
                         className={`week-label ${row.labelClass}`}
                         style={{
-                          cursor: "pointer", position: "relative",
+                          cursor: row.label ? "pointer" : "default", position: "relative",
                           ...(weekColor ? {
                             background: weekColor + "22",
                             border: `1.5px solid ${weekColor}88`,
                             borderRadius: "4px",
                           } : {})
                         }}
-                        onClick={() => { setSelectedWeek({ ...row, weekIndex: ri }); setSelectedDate(null); setShowForm(false); setTransferring(null); }}
+                        onClick={row.label ? () => {
+                          setSelectedWeek({ ...row, dates: getWeekDates(row.weekIndex) });
+                          setSelectedDate(null);
+                          setShowForm(false);
+                          setTransferring(null);
+                        } : undefined}
                       >
                         {row.label}
                         {weekEvs.length > 1 && (
@@ -2430,6 +2438,9 @@ export default function App() {
                     );
                   })()}
                   {row.dates.map((date, di) => {
+                    if (date > semesterLastDate) {
+                      return <td key={di} className="cal-cell outside-semester-empty" aria-hidden="true" />;
+                    }
                     const cellType = getCellType(date, sem.specialRanges);
                     const isWknd = weekendCols.includes(di);
                     const dayEvents = getEventsForDate(date);
@@ -2446,6 +2457,7 @@ export default function App() {
                     const isRevision = cellType === "revision";
                     const urgency = getCellUrgency(dayEvents, date, today);
                     const plannerProgress = plannerCountsByDate[date];
+                    const showPlannerReminder = plannerProgress && shouldShowPlannerReminder(date, today, 3);
 
                     // Classes: exam always red; revision only when no events; holiday bg removed
                     let cls = "cal-cell";
@@ -2499,7 +2511,7 @@ export default function App() {
                               )}
                             </span>
                           </div>
-                          {plannerProgress && (
+                          {showPlannerReminder && (
                             <div className="calendar-planner-progress" title={`${plannerProgress.completed}/${plannerProgress.total} ${lang === "zh" ? "项计划已完成" : "planner tasks complete"}`}>
                               <span>{lang === "zh" ? "计划" : "Tasks"} {plannerProgress.completed}/{plannerProgress.total}</span>
                               <i><b style={{ width: `${Math.round((plannerProgress.completed / plannerProgress.total) * 100)}%` }} /></i>
@@ -2584,7 +2596,7 @@ export default function App() {
               >
                 {selectedWeek && selectedWeek.dates.map((date, i) => (
                   <option key={i} value={i}>
-                    {dayLabels[i]}（{formatDate(date, dateStyle)}）
+                    {new Date(`${date}T00:00:00`).toLocaleDateString(lang === "zh" ? "zh-CN" : "en-US", { weekday: "short" })}（{formatDate(date, dateStyle)}）
                   </option>
                 ))}
               </select>

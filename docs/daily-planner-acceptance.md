@@ -16,6 +16,7 @@ First apply `supabase/migrations/20261016_daily_planner_tasks.sql` in Supabase a
 - [ ] Refresh, sign out and back in, and confirm planner tasks and completion state persist.
 - [ ] Confirm old To-do planned items and the task pool remain available with their existing behavior.
 - [ ] Add and complete tasks; confirm the month cell shows completed/total with no indicator on empty dates.
+- [ ] Confirm a month-cell planner reminder disappears on the date three days after its task date while the task record remains accessible in the planner.
 - [ ] Open Upcoming 7 Days; confirm the default range is today through today plus six days.
 - [ ] Navigate backward and forward by seven days, then return to today.
 - [ ] Confirm all calendar entries and planner tasks are visible; open a day and verify the existing event controls still work.

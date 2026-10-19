@@ -14,6 +14,8 @@ The month grid selects a date to open the existing right-side detail panel; the 
 
 Date values are plain `YYYY-MM-DD` calendar dates. Date range calculations construct local calendar dates and do not parse or serialize task dates through UTC. The current date is refreshed while the page is open and on window focus.
 
+The current day follows `Asia/Kuala_Lumpur`, matching the app's XMUM audience. Month-cell planner reminders are hidden once their date is three or more calendar days in the past; this only hides the compact reminder. The planner rows themselves are retained and remain accessible in daily and rolling views.
+
 ## Supabase setup required
 
 The remote schema has not been changed by this code task. Before using the planner, apply [`../supabase/migrations/20261016_daily_planner_tasks.sql`](../supabase/migrations/20261016_daily_planner_tasks.sql) to the project's Supabase database, for example in the Supabase SQL Editor. The migration creates the table, index, ownership policies, grants, and `updated_at` trigger. No existing rows are modified.
